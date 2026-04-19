@@ -1,0 +1,2723 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>SND · Vehicle Command Hub</title>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@300;400;500;600;700&family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet"/>
+<script>
+// Set theme before paint to prevent flash
+(function(){
+  var t=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';
+  document.documentElement.setAttribute('data-theme',t);
+})();
+</script>
+<style>
+:root {
+  --cyan:#00e5ff; --amber:#ffb300; --red:#ff3b3b; --green:#00e676; --purple:#b388ff;
+  --bg:#070a10; --surface:#0d1117; --surface2:#111927; --surface3:#0a1020;
+  --border:rgba(0,229,255,0.13); --border2:rgba(0,229,255,0.06);
+  --text:#cfd8e3; --dim:#4a5568; --dimmer:#2d3748;
+  --topbar:rgba(7,10,16,0.97);
+  --card-glow:rgba(0,229,255,0.06);
+  --accent:var(--cyan);
+  transition: background 0.5s, color 0.5s;
+}
+[data-theme="light"] {
+  --cyan:#0077cc; --amber:#e07b00; --red:#cc2222; --green:#007a3d; --purple:#6633cc;
+  --bg:#eef2f7; --surface:#ffffff; --surface2:#f4f7fb; --surface3:#e8edf5;
+  --border:rgba(0,100,200,0.15); --border2:rgba(0,100,200,0.07);
+  --text:#1a2333; --dim:#6b7280; --dimmer:#9ca3af;
+  --topbar:rgba(238,242,247,0.97);
+  --card-glow:rgba(0,100,200,0.05);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow-x:hidden}
+body{
+  background:var(--bg);
+  color:var(--text);
+  font-family:'Rajdhani',sans-serif;
+  min-height:100vh;
+  transition:background 0.5s,color 0.5s;
+}
+/* ── ANIMATED BACKGROUND ── */
+#bg-canvas{
+  position:fixed;inset:0;width:100%;height:100%;
+  z-index:0;pointer-events:none;
+  opacity:1;transition:opacity 0.5s;
+}
+/* ── SCANLINES ── */
+#scanlines{
+  position:fixed;inset:0;pointer-events:none;z-index:1;
+  background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.04) 2px,rgba(0,0,0,0.04) 4px);
+}
+[data-theme="light"] #scanlines{opacity:0.3}
+/* ── CORNER BRACKETS ── */
+.bracket{position:fixed;width:32px;height:32px;border-color:var(--accent);border-style:solid;opacity:0.35;pointer-events:none;z-index:10;}
+.bracket.tl{top:14px;left:14px;border-width:1.5px 0 0 1.5px}
+.bracket.tr{top:14px;right:14px;border-width:1.5px 1.5px 0 0}
+.bracket.bl{bottom:14px;left:14px;border-width:0 0 1.5px 1.5px}
+.bracket.br{bottom:14px;right:14px;border-width:0 1.5px 1.5px 0}
+/* ── TOPBAR ── */
+.topbar{
+  position:sticky;top:0;z-index:50;
+  display:flex;align-items:center;justify-content:space-between;
+  padding:0 32px;height:56px;
+  background:var(--topbar);
+  border-bottom:1px solid var(--border);
+  backdrop-filter:blur(12px);
+}
+.logo{
+  font-family:'Orbitron',monospace;font-size:12px;font-weight:700;
+  letter-spacing:0.22em;color:var(--accent);
+  display:flex;align-items:center;gap:10px;
+}
+.logo-pulse{
+  width:8px;height:8px;border-radius:50%;
+  background:var(--accent);position:relative;
+}
+.logo-pulse::after{
+  content:'';position:absolute;inset:-3px;border-radius:50%;
+  border:1.5px solid var(--accent);
+  animation:ping 2s infinite;
+}
+@keyframes ping{0%{transform:scale(1);opacity:0.8}100%{transform:scale(2.2);opacity:0}}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0.2}}
+.topbar-right{display:flex;align-items:center;gap:20px;font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--dim);letter-spacing:0.12em;}
+.srv-dot{width:6px;height:6px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green);animation:blink 1.8s infinite;flex-shrink:0}
+.mode-toggle{
+  padding:5px 12px;background:var(--surface2);border:1px solid var(--border);
+  border-radius:20px;cursor:pointer;font-family:'Share Tech Mono',monospace;
+  font-size:10px;letter-spacing:0.15em;color:var(--text);
+  transition:all 0.3s;
+}
+.mode-toggle:hover{border-color:var(--accent);color:var(--accent)}
+/* ── SHELL ── */
+.shell{
+  position:relative;z-index:2;
+  display:grid;grid-template-columns:1fr 320px;
+  min-height:calc(100vh - 56px);
+}
+.main-col{padding:24px 28px;display:flex;flex-direction:column;gap:20px;border-right:1px solid var(--border);}
+.sidebar{padding:20px 18px;display:flex;flex-direction:column;gap:16px;background:var(--surface);}
+/* ── SECTION LABEL ── */
+.sec-label{
+  font-family:'Share Tech Mono',monospace;font-size:9px;letter-spacing:0.28em;
+  color:var(--dim);text-transform:uppercase;margin-bottom:12px;
+  display:flex;align-items:center;gap:8px;
+}
+.sec-label::after{content:'';flex:1;height:1px;background:var(--border);}
+/* ── PANEL CARD ── */
+.panel{
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:4px;padding:16px 18px;position:relative;overflow:hidden;
+  transition:background 0.5s,border-color 0.3s;
+}
+.panel::before{
+  content:'';position:absolute;top:0;left:0;right:0;height:1px;
+  background:linear-gradient(90deg,transparent,var(--accent),transparent);
+  opacity:0.3;
+}
+/* ── GAUGE CLUSTER ── */
+.gauge-cluster{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;}
+.gauge-card{
+  background:var(--surface);border:1px solid var(--border);border-radius:4px;
+  padding:14px 10px;display:flex;flex-direction:column;align-items:center;gap:6px;
+  position:relative;overflow:hidden;cursor:default;
+  transition:border-color 0.3s,transform 0.2s;
+}
+.gauge-card:hover{border-color:var(--accent);transform:translateY(-1px)}
+.gauge-card::before{
+  content:'';position:absolute;top:0;left:0;right:0;height:1px;
+  background:linear-gradient(90deg,transparent,var(--accent),transparent);opacity:0.4;
+}
+.gauge-card-label{font-family:'Share Tech Mono',monospace;font-size:9px;letter-spacing:0.22em;color:var(--accent);text-transform:uppercase}
+.gauge-card-val{font-family:'Orbitron',monospace;font-size:32px;font-weight:700;line-height:1;color:#fff;transition:color 0.4s}
+[data-theme="light"] .gauge-card-val{color:var(--text)}
+.gauge-card-unit{font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--dim);letter-spacing:0.14em}
+/* ── SVG RING GAUGE ── */
+.ring-wrap{position:relative;width:70px;height:70px;flex-shrink:0}
+.ring-wrap svg{transform:rotate(-90deg)}
+.ring-track{fill:none;stroke:var(--border2);stroke-width:5}
+.ring-fill{fill:none;stroke-width:5;stroke-linecap:round;transition:stroke-dashoffset 0.7s cubic-bezier(0.4,0,0.2,1),stroke 0.4s;}
+.ring-text{font-family:'Share Tech Mono',monospace;font-size:11px;font-weight:600;text-anchor:middle;dominant-baseline:middle;fill:var(--text);}
+/* ── SIGNAL BARS ── */
+.sig-bars{display:flex;align-items:flex-end;gap:3px;height:28px}
+.sig-bar{width:7px;background:rgba(255,255,255,0.08);border-radius:1px;transition:background 0.35s,height 0.35s}
+[data-theme="light"] .sig-bar{background:rgba(0,0,0,0.07)}
+.sig-bar.on{background:var(--cyan);box-shadow:0 0 4px var(--cyan)}
+.sig-bar.warn{background:var(--amber);box-shadow:0 0 4px var(--amber)}
+.sig-bar.bad{background:var(--red);box-shadow:0 0 4px var(--red)}
+/* ── BUTTONS ── */
+.hud-btn{
+  flex:1;min-width:110px;padding:10px 14px;
+  font-family:'Rajdhani',sans-serif;font-size:12px;font-weight:600;
+  letter-spacing:0.14em;text-transform:uppercase;
+  background:rgba(255,255,255,0.025);border:1px solid rgba(0,229,255,0.2);
+  color:var(--cyan);border-radius:3px;cursor:pointer;
+  transition:all 0.18s;position:relative;overflow:hidden;
+}
+[data-theme="light"] .hud-btn{background:rgba(0,0,0,0.02);border-color:rgba(0,119,204,0.2)}
+.hud-btn::after{content:'';position:absolute;inset:0;background:var(--accent);opacity:0;transition:opacity 0.15s}
+.hud-btn:hover{border-color:var(--accent);color:#fff}
+.hud-btn:hover::after{opacity:0.07}
+.hud-btn:active{transform:scale(0.96)}
+.hud-btn.amber-btn{border-color:rgba(255,179,0,0.25);color:var(--amber)}
+.hud-btn.red-btn{border-color:rgba(255,59,59,0.25);color:var(--red)}
+.hud-btn.grn-btn{border-color:rgba(0,230,118,0.25);color:var(--green)}
+.hud-btn.purple-btn{border-color:rgba(179,136,255,0.25);color:var(--purple)}
+.hud-btn.active-sim{background:rgba(0,230,118,0.08);border-color:var(--green);color:var(--green)}
+.ctrl-row{display:flex;gap:8px;flex-wrap:wrap}
+/* ── INPUTS ── */
+.hud-input{
+  width:100%;background:rgba(255,255,255,0.03);border:1px solid rgba(0,229,255,0.18);
+  border-radius:3px;padding:8px 12px;color:var(--text);
+  font-family:'Rajdhani',sans-serif;font-size:14px;font-weight:500;outline:none;
+  transition:border-color 0.2s;
+}
+[data-theme="light"] .hud-input{background:rgba(0,0,0,0.03);border-color:rgba(0,100,180,0.2);color:var(--text)}
+.hud-input:focus{border-color:var(--accent)}
+.hud-input::placeholder{color:var(--dim)}
+.hud-select{
+  appearance:none;background:rgba(255,255,255,0.03);border:1px solid rgba(0,229,255,0.18);
+  border-radius:3px;padding:8px 32px 8px 12px;color:var(--text);
+  font-family:'Share Tech Mono',monospace;font-size:11px;letter-spacing:0.1em;
+  outline:none;cursor:pointer;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%2300e5ff' opacity='.6'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 10px center;
+  transition:border-color 0.2s;
+}
+[data-theme="light"] .hud-select{background-color:rgba(0,0,0,0.02);border-color:rgba(0,100,180,0.2);color:var(--text);
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%230077cc' opacity='.6'/%3E%3C/svg%3E")}
+.hud-select option{background:var(--surface);color:var(--text)}
+.hud-select:focus{border-color:var(--accent)}
+.field-grp{display:flex;flex-direction:column;gap:5px}
+.field-lbl{font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--dim);letter-spacing:0.2em;text-transform:uppercase}
+.compose-row{display:grid;grid-template-columns:1fr auto auto;gap:8px;align-items:end}
+/* ── NOTIF CARDS ── */
+.notif-scroll{max-height:200px;overflow-y:auto;display:flex;flex-direction:column;gap:6px;padding-right:2px}
+.notif-scroll::-webkit-scrollbar{width:2px}
+.notif-scroll::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+.notif-card{
+  padding:9px 12px;border-radius:3px;border-left:2px solid transparent;
+  background:rgba(255,255,255,0.025);
+  display:flex;align-items:center;gap:8px;font-size:12px;font-weight:500;
+  animation:slideIn 0.25s ease;transition:background 0.3s;
+}
+[data-theme="light"] .notif-card{background:rgba(0,0,0,0.025)}
+@keyframes slideIn{from{opacity:0;transform:translateX(-8px)}to{opacity:1;transform:translateX(0)}}
+.notif-card.pending{border-left-color:var(--amber);background:rgba(255,179,0,0.05)}
+.notif-card.delivered{border-left-color:var(--green);background:rgba(0,230,118,0.04)}
+.notif-msg{flex:1;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px}
+.pill{
+  font-family:'Share Tech Mono',monospace;font-size:8px;letter-spacing:0.1em;
+  padding:2px 6px;border-radius:2px;flex-shrink:0;text-transform:uppercase;
+}
+.pill.high{background:rgba(255,59,59,0.15);color:#ff6b6b;border:1px solid rgba(255,59,59,0.3)}
+.pill.low{background:rgba(74,85,104,0.2);color:var(--dim);border:1px solid rgba(74,85,104,0.3)}
+.pill.pending{background:rgba(255,179,0,0.12);color:var(--amber);border:1px solid rgba(255,179,0,0.25)}
+.pill.delivered{background:rgba(0,230,118,0.1);color:var(--green);border:1px solid rgba(0,230,118,0.25)}
+.empty{font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--dim);letter-spacing:0.22em;text-align:center;padding:16px 0}
+/* ── ROUTE ── */
+.route-track{
+  display:flex;align-items:center;gap:0;
+  background:rgba(0,0,0,0.3);border:1px solid var(--border);border-radius:3px;
+  padding:8px 14px;position:relative;height:44px;overflow:hidden;
+}
+[data-theme="light"] .route-track{background:rgba(0,0,0,0.05)}
+.route-seg{flex:1;height:6px;border-radius:1px;transition:background 0.5s,opacity 0.4s,box-shadow 0.4s}
+.route-car{position:absolute;font-size:18px;transition:left 0.9s cubic-bezier(0.4,0,0.2,1);filter:drop-shadow(0 0 6px var(--cyan))}
+/* ── LOG ── */
+.log-box{
+  background:#040608;border:1px solid var(--border);border-radius:3px;
+  padding:10px 12px;max-height:110px;overflow-y:auto;
+  font-family:'Share Tech Mono',monospace;font-size:9px;line-height:1.9;
+}
+[data-theme="light"] .log-box{background:var(--surface3)}
+.log-box::-webkit-scrollbar{width:2px}
+.log-box::-webkit-scrollbar-thumb{background:rgba(0,229,255,0.2);border-radius:2px}
+.log-line{color:var(--dim)}
+.log-line.g{color:#00b74a}.log-line.a{color:#d49b16}.log-line.r{color:#cc3333}.log-line.c{color:var(--cyan)}.log-line.p{color:var(--purple)}
+/* ── SIDEBAR ── */
+.side-panel{background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:13px 15px}
+.side-title{font-family:'Share Tech Mono',monospace;font-size:9px;letter-spacing:0.24em;color:var(--dim);text-transform:uppercase;margin-bottom:11px}
+.kv-row{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.04);font-size:12px;font-weight:500}
+[data-theme="light"] .kv-row{border-bottom-color:rgba(0,0,0,0.06)}
+.kv-row:last-child{border-bottom:none}
+.kv-key{color:var(--dim);font-size:11px;letter-spacing:0.06em}
+.kv-val{font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--text)}
+.kv-val.cyan{color:var(--cyan)}.kv-val.green{color:var(--green)}.kv-val.amber{color:var(--amber)}.kv-val.red{color:var(--red)}
+/* ── STAT ROW ── */
+.stat-row{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.stat-card{padding:10px 8px;background:rgba(0,0,0,0.2);border:1px solid var(--border);border-radius:3px;text-align:center}
+[data-theme="light"] .stat-card{background:rgba(0,0,0,0.04)}
+.stat-val{font-size:22px;font-weight:700;font-family:'Orbitron',monospace;color:var(--text);line-height:1}
+.stat-lbl{font-size:8px;letter-spacing:0.18em;color:var(--dim);text-transform:uppercase;margin-top:3px}
+/* ── EFFICIENCY RING ── */
+.eff-wrap{display:flex;align-items:center;gap:14px;padding:4px 0}
+.eff-label-group{display:flex;flex-direction:column;gap:3px}
+.eff-big{font-family:'Orbitron',monospace;font-size:26px;font-weight:700;color:var(--green);line-height:1}
+.eff-sub{font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--dim);letter-spacing:0.18em}
+/* ── SPARKLINE ── */
+.sparkline-wrap{position:relative;height:50px;margin-top:4px}
+.sparkline-wrap canvas{display:block;width:100%;height:100%}
+/* ── VEHICLE HEALTH ── */
+.health-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.health-item{
+  padding:8px 10px;background:rgba(0,0,0,0.15);border:1px solid var(--border2);
+  border-radius:3px;display:flex;align-items:center;gap:8px;
+}
+[data-theme="light"] .health-item{background:rgba(0,0,0,0.04)}
+.health-icon{font-size:14px;flex-shrink:0}
+.health-info{flex:1;min-width:0}
+.health-name{font-size:10px;color:var(--dim);letter-spacing:0.1em;margin-bottom:3px}
+.health-bar-track{height:3px;background:rgba(255,255,255,0.08);border-radius:2px}
+[data-theme="light"] .health-bar-track{background:rgba(0,0,0,0.1)}
+.health-bar-fill{height:3px;border-radius:2px;transition:width 0.7s cubic-bezier(0.4,0,0.2,1),background 0.4s}
+.health-val{font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text);flex-shrink:0}
+/* ── TIMELINE ── */
+.tl-item{display:flex;gap:8px;align-items:flex-start;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.04);font-size:11px;font-weight:500}
+[data-theme="light"] .tl-item{border-bottom-color:rgba(0,0,0,0.06)}
+.tl-item:last-child{border-bottom:none}
+.tl-dot{width:5px;height:5px;border-radius:50%;margin-top:4px;flex-shrink:0}
+.tl-dot.p{background:var(--amber)}.tl-dot.d{background:var(--green)}
+.tl-msg{flex:1;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px}
+.tl-badge{font-family:'Share Tech Mono',monospace;font-size:8px;color:var(--dim);flex-shrink:0}
+/* ── EMERGENCY ALERT ── */
+#alert-banner{
+  position:fixed;top:56px;left:0;right:0;z-index:90;
+  padding:8px 32px;
+  display:flex;align-items:center;gap:12px;
+  background:rgba(255,59,59,0.12);border-bottom:1px solid rgba(255,59,59,0.4);
+  backdrop-filter:blur(8px);
+  transform:translateY(-100%);opacity:0;transition:all 0.3s;
+  font-family:'Share Tech Mono',monospace;font-size:11px;letter-spacing:0.14em;color:#ff6b6b;
+}
+#alert-banner.show{transform:translateY(0);opacity:1}
+.alert-dot{width:7px;height:7px;border-radius:50%;background:var(--red);animation:blink 0.5s infinite;box-shadow:0 0 8px var(--red)}
+/* ── LATENCY BADGE ── */
+.latency{font-family:'Share Tech Mono',monospace;font-size:8px;color:var(--dim);flex-shrink:0}
+/* ── TOAST ── */
+#toast{
+  position:fixed;bottom:24px;right:24px;z-index:200;
+  padding:9px 16px;background:var(--surface2);
+  border:1px solid rgba(0,229,255,0.3);border-left:2px solid var(--accent);
+  border-radius:3px;font-family:'Share Tech Mono',monospace;font-size:10px;
+  letter-spacing:0.14em;color:var(--accent);
+  transform:translateY(60px);opacity:0;transition:all 0.3s;
+}
+#toast.show{transform:translateY(0);opacity:1}
+/* ── PARTICLE CANVAS ── */
+#particle-canvas{position:fixed;inset:0;pointer-events:none;z-index:3}
+/* ── NETWORK HEATMAP ── */
+.heatmap-grid{display:grid;grid-template-columns:repeat(10,1fr);gap:2px;margin-top:6px}
+.hmap-cell{height:10px;border-radius:1px;transition:background 0.4s}
+/* ── SCROLLBAR ── */
+::-webkit-scrollbar{width:3px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+/* ── COMPONENT TILES ── */
+.comp-tile{
+  padding:10px 8px;border:1px solid var(--border);border-radius:4px;
+  background:rgba(255,255,255,0.02);cursor:pointer;
+  display:flex;flex-direction:column;align-items:center;gap:5px;
+  transition:all 0.2s;position:relative;overflow:hidden;
+}
+.comp-tile:hover{border-color:var(--accent);background:rgba(0,229,255,0.05);transform:translateY(-1px)}
+.comp-tile.active{background:rgba(0,229,255,0.08);border-color:var(--accent);box-shadow:0 0 12px rgba(0,229,255,0.1)}
+.comp-tile.fault{border-color:var(--red)!important;background:rgba(255,59,59,0.07)!important;animation:fault-pulse 1.2s infinite}
+@keyframes fault-pulse{0%,100%{box-shadow:0 0 0 rgba(255,59,59,0)}50%{box-shadow:0 0 10px rgba(255,59,59,0.3)}}
+.comp-icon{font-size:20px;line-height:1}
+.comp-name{font-family:'Share Tech Mono',monospace;font-size:9px;letter-spacing:0.18em;color:var(--accent);text-transform:uppercase}
+.comp-status{font-size:7px;letter-spacing:0.12em;color:var(--dim);font-family:'Share Tech Mono',monospace}
+.comp-msg-item{
+  padding:7px 10px;border:1px solid var(--border2);border-radius:3px;
+  background:rgba(255,255,255,0.02);cursor:pointer;
+  font-size:11px;font-weight:500;color:var(--text);
+  transition:all 0.15s;border-left:2px solid transparent;
+}
+.comp-msg-item:hover{background:rgba(0,229,255,0.05);border-left-color:var(--accent)}
+.comp-msg-item.selected{background:rgba(0,229,255,0.07);border-left-color:var(--accent);border-color:rgba(0,229,255,0.2)}
+.comp-msg-title{font-weight:600;font-size:11px;margin-bottom:2px}
+.comp-msg-body{font-size:9px;color:var(--dim);letter-spacing:0.05em;line-height:1.4}
+/* ── PRED BADGE IN NOTIF CARD ── */
+.pred-tag{font-family:'Share Tech Mono',monospace;font-size:8px;color:var(--amber);letter-spacing:0.08em;white-space:nowrap;flex-shrink:0}
+/* ── APP ROW (expanded inline view) ── */
+.app-row{
+  border:1px solid var(--border);border-radius:4px;
+  background:rgba(179,136,255,0.02);
+  overflow:hidden;transition:border-color 0.2s;
+  margin-bottom:8px;
+}
+.app-row:last-child{margin-bottom:0}
+.app-row-header{
+  display:flex;align-items:center;gap:10px;
+  padding:9px 12px;cursor:pointer;
+  border-bottom:1px solid var(--border2);
+  background:rgba(179,136,255,0.03);
+  transition:background 0.2s;
+}
+.app-row-header:hover{background:rgba(179,136,255,0.07)}
+.app-row.tx .app-row-header{background:rgba(0,230,118,0.07);border-color:var(--green)}
+.app-row.tx{border-color:var(--green)!important;animation:fault-pulse 1.2s infinite}
+.app-row-icon{font-size:18px;line-height:1;flex-shrink:0}
+.app-row-meta{flex:1;min-width:0}
+.app-row-name{font-family:'Share Tech Mono',monospace;font-size:10px;letter-spacing:0.18em;text-transform:uppercase;line-height:1.2}
+.app-row-full{font-size:9px;color:var(--dim);letter-spacing:0.06em;margin-top:1px}
+.app-row-badge{font-family:'Share Tech Mono',monospace;font-size:7px;letter-spacing:0.1em;color:var(--dim);padding:2px 6px;border:1px solid var(--border2);border-radius:2px;flex-shrink:0}
+.app-row-caret{font-size:10px;color:var(--dim);transition:transform 0.2s;flex-shrink:0}
+.app-row.open .app-row-caret{transform:rotate(180deg)}
+.app-imp-msgs{display:none;padding:8px 10px;display:flex;flex-direction:column;gap:5px}
+.app-row.open .app-imp-msgs{display:flex}
+/* Important message card */
+.imp-msg-card{
+  padding:8px 10px;border:1px solid var(--border2);border-radius:3px;
+  background:rgba(255,255,255,0.02);cursor:pointer;
+  transition:all 0.15s;border-left:2px solid transparent;
+  display:flex;align-items:flex-start;gap:8px;
+}
+[data-theme="light"] .imp-msg-card{background:rgba(0,0,0,0.02)}
+.imp-msg-card:hover{background:rgba(179,136,255,0.06);border-left-color:var(--purple)}
+.imp-msg-card.selected{background:rgba(179,136,255,0.08);border-left-color:var(--purple);border-color:rgba(179,136,255,0.22)}
+.imp-msg-card.prio-URGENT{border-left-color:var(--red)!important;background:rgba(255,59,59,0.04)!important}
+.imp-msg-card.prio-URGENT:hover{background:rgba(255,59,59,0.08)!important}
+.imp-msg-card.prio-HIGH{border-left-color:var(--amber)!important;background:rgba(255,179,0,0.03)!important}
+.imp-msg-card.prio-HIGH:hover{background:rgba(255,179,0,0.07)!important}
+.imp-msg-content{flex:1;min-width:0}
+.imp-msg-title{font-weight:600;font-size:11px;margin-bottom:2px;color:var(--text)}
+.imp-msg-body{font-size:9px;color:var(--dim);letter-spacing:0.05em;line-height:1.4}
+.imp-msg-prio{font-family:'Share Tech Mono',monospace;font-size:7px;letter-spacing:0.1em;padding:2px 5px;border-radius:2px;flex-shrink:0;margin-top:1px}
+.imp-msg-prio.URGENT{background:rgba(255,59,59,0.15);color:#ff6b6b;border:1px solid rgba(255,59,59,0.3)}
+.imp-msg-prio.HIGH{background:rgba(255,179,0,0.12);color:var(--amber);border:1px solid rgba(255,179,0,0.25)}
+.imp-msg-prio.NORMAL{background:rgba(74,85,104,0.2);color:var(--dim);border:1px solid rgba(74,85,104,0.3)}
+/* No-important-msg placeholder */
+.no-imp-msg{font-family:'Share Tech Mono',monospace;font-size:8px;color:var(--dim);letter-spacing:0.18em;padding:6px 4px;text-align:center}
+/* App action row */
+.app-action-row{display:flex;gap:6px;padding:6px 10px 8px;border-top:1px solid var(--border2)}
+/* Legacy app-tile kept for JS compat but hidden */
+.app-tile{display:none}
+.app-icon{font-size:20px;line-height:1}
+.app-name{font-family:'Share Tech Mono',monospace;font-size:9px;letter-spacing:0.18em;color:var(--purple);text-transform:uppercase}
+.app-ver{font-size:7px;letter-spacing:0.12em;color:var(--dim);font-family:'Share Tech Mono',monospace}
+.app-msg-item{
+  padding:7px 10px;border:1px solid var(--border2);border-radius:3px;
+  background:rgba(179,136,255,0.02);cursor:pointer;
+  font-size:11px;font-weight:500;color:var(--text);
+  transition:all 0.15s;border-left:2px solid transparent;
+}
+.app-msg-item:hover{background:rgba(179,136,255,0.06);border-left-color:var(--purple)}
+.app-msg-item.selected{background:rgba(179,136,255,0.08);border-left-color:var(--purple);border-color:rgba(179,136,255,0.22)}
+.app-msg-title{font-weight:600;font-size:11px;margin-bottom:2px}
+.app-msg-body{font-size:9px;color:var(--dim);letter-spacing:0.05em;line-height:1.4}
+/* ── NOTIFICATION SUMMARY PANEL ── */
+#notif-summary{
+  background:var(--surface);border:1px solid var(--border);border-radius:4px;
+  overflow:hidden;transition:all 0.3s;
+}
+#notif-summary::before{
+  content:'';display:block;height:1px;
+  background:linear-gradient(90deg,transparent,var(--amber),transparent);opacity:0.4;
+}
+.ns-header{
+  display:flex;align-items:center;gap:10px;padding:10px 14px;cursor:pointer;
+  background:rgba(255,179,0,0.03);border-bottom:1px solid var(--border2);
+  transition:background 0.2s;
+}
+.ns-header:hover{background:rgba(255,179,0,0.07)}
+.ns-title{font-family:'Share Tech Mono',monospace;font-size:9px;letter-spacing:0.24em;color:var(--amber);text-transform:uppercase;flex:1}
+.ns-total-badge{font-family:'Orbitron',monospace;font-size:14px;font-weight:700;color:var(--amber);line-height:1;padding:0 4px}
+.ns-caret{font-size:10px;color:var(--dim);transition:transform 0.2s;flex-shrink:0}
+#notif-summary.open .ns-caret{transform:rotate(180deg)}
+.ns-body{display:none;padding:12px 14px}
+#notif-summary.open .ns-body{display:block}
+.ns-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:10px}
+.ns-stat{
+  padding:8px 6px;background:rgba(0,0,0,0.2);border:1px solid var(--border2);
+  border-radius:3px;text-align:center;
+}
+[data-theme="light"] .ns-stat{background:rgba(0,0,0,0.04)}
+.ns-stat-val{font-family:'Orbitron',monospace;font-size:20px;font-weight:700;line-height:1;margin-bottom:3px}
+.ns-stat-lbl{font-family:'Share Tech Mono',monospace;font-size:7px;letter-spacing:0.18em;color:var(--dim);text-transform:uppercase}
+.ns-breakdown{display:flex;flex-direction:column;gap:5px}
+.ns-row{display:flex;align-items:center;gap:8px;font-size:11px;font-weight:500}
+.ns-row-label{font-family:'Share Tech Mono',monospace;font-size:9px;letter-spacing:0.12em;color:var(--dim);width:56px;flex-shrink:0}
+.ns-bar-track{flex:1;height:5px;background:rgba(255,255,255,0.06);border-radius:3px;overflow:hidden}
+[data-theme="light"] .ns-bar-track{background:rgba(0,0,0,0.08)}
+.ns-bar-fill{height:5px;border-radius:3px;transition:width 0.5s cubic-bezier(0.4,0,0.2,1)}
+.ns-bar-count{font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text);width:22px;text-align:right;flex-shrink:0}
+.ns-source-grid{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-top:8px}
+.ns-source-chip{
+  display:flex;align-items:center;gap:6px;padding:5px 8px;
+  background:rgba(255,255,255,0.02);border:1px solid var(--border2);border-radius:3px;
+  font-size:10px;font-weight:500;
+}
+[data-theme="light"] .ns-source-chip{background:rgba(0,0,0,0.03)}
+.ns-source-icon{font-size:13px;line-height:1;flex-shrink:0}
+.ns-source-name{flex:1;font-family:'Share Tech Mono',monospace;font-size:8px;letter-spacing:0.1em;color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ns-source-cnt{font-family:'Orbitron',monospace;font-size:11px;font-weight:700;flex-shrink:0}
+/* ── APP ICON TILES (like component bus) ── */
+.app-tile-new{
+  padding:10px 8px;border:1px solid var(--border);border-radius:4px;
+  background:rgba(179,136,255,0.03);cursor:pointer;
+  display:flex;flex-direction:column;align-items:center;gap:5px;
+  transition:all 0.2s;position:relative;overflow:hidden;
+}
+.app-tile-new:hover{border-color:var(--purple);background:rgba(179,136,255,0.07);transform:translateY(-1px)}
+.app-tile-new.active{background:rgba(179,136,255,0.10);border-color:var(--purple);box-shadow:0 0 12px rgba(179,136,255,0.12)}
+.app-tile-new.tx{border-color:var(--green)!important;background:rgba(0,230,118,0.06)!important;animation:fault-pulse 1.2s infinite}
+.app-tile-new::before{
+  content:'';position:absolute;top:0;left:0;right:0;height:1px;
+  background:linear-gradient(90deg,transparent,var(--purple),transparent);opacity:0.3;
+}
+.app-tile-icon{font-size:22px;line-height:1}
+.app-tile-name{font-family:'Share Tech Mono',monospace;font-size:8px;letter-spacing:0.16em;color:var(--purple);text-transform:uppercase}
+.app-tile-ver{font-size:7px;letter-spacing:0.1em;color:var(--dim);font-family:'Share Tech Mono',monospace}
+.app-tile-alert{
+  position:absolute;top:4px;right:4px;
+  min-width:14px;height:14px;border-radius:7px;
+  background:var(--red);color:#fff;
+  font-family:'Share Tech Mono',monospace;font-size:7px;font-weight:700;
+  display:flex;align-items:center;justify-content:center;padding:0 3px;
+  box-shadow:0 0 6px rgba(255,59,59,0.5);
+}
+/* ── APP MESSAGE PANEL (below grid, like comp-msg-area) ── */
+#app-detail-area{
+  display:none;margin-top:12px;
+  border:1px solid rgba(179,136,255,0.2);border-radius:4px;
+  background:rgba(179,136,255,0.03);overflow:hidden;
+}
+#app-detail-area::before{
+  content:'';display:block;height:1px;
+  background:linear-gradient(90deg,transparent,var(--purple),transparent);opacity:0.35;
+}
+.app-detail-header{
+  display:flex;align-items:center;gap:10px;
+  padding:10px 12px;border-bottom:1px solid rgba(179,136,255,0.1);
+}
+.app-detail-icon{font-size:22px;line-height:1;flex-shrink:0}
+.app-detail-meta{flex:1;min-width:0}
+.app-detail-name{font-family:'Share Tech Mono',monospace;font-size:11px;letter-spacing:0.18em;text-transform:uppercase;line-height:1.2}
+.app-detail-full{font-size:10px;color:var(--dim);letter-spacing:0.04em;margin-top:2px}
+.app-detail-msgs{padding:8px 10px;display:flex;flex-direction:column;gap:6px;max-height:200px;overflow-y:auto}
+.app-detail-msgs::-webkit-scrollbar{width:2px}
+.app-detail-msgs::-webkit-scrollbar-thumb{background:rgba(179,136,255,0.3);border-radius:2px}
+.app-detail-item{
+  padding:10px 12px;border:1px solid var(--border2);border-radius:3px;
+  background:rgba(255,255,255,0.02);cursor:pointer;
+  transition:all 0.15s;border-left:2px solid transparent;
+}
+[data-theme="light"] .app-detail-item{background:rgba(0,0,0,0.02)}
+.app-detail-item:hover{background:rgba(179,136,255,0.06);border-left-color:var(--purple)}
+.app-detail-item.selected{background:rgba(179,136,255,0.08);border-left-color:var(--purple);border-color:rgba(179,136,255,0.22)}
+.app-detail-item.prio-URGENT{border-left-color:var(--red)!important;background:rgba(255,59,59,0.04)!important}
+.app-detail-item.prio-HIGH{border-left-color:var(--amber)!important;background:rgba(255,179,0,0.03)!important}
+.app-detail-item-header{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:4px}
+.app-detail-item-title{font-family:'Rajdhani',sans-serif;font-size:13px;font-weight:600;color:var(--text);line-height:1.2;flex:1}
+.app-detail-item-prio{font-family:'Share Tech Mono',monospace;font-size:8px;letter-spacing:0.1em;padding:2px 6px;border-radius:2px;flex-shrink:0}
+.app-detail-item-body{font-family:'Rajdhani',sans-serif;font-size:12px;font-weight:400;color:var(--dim);line-height:1.5;letter-spacing:0.02em}
+.app-detail-actions{display:flex;gap:8px;padding:8px 10px;border-top:1px solid rgba(179,136,255,0.1)}
+/* ── NOTIFICATION POPUP MODAL ── */
+#notif-popup{
+  position:fixed;bottom:80px;right:24px;z-index:300;
+  width:360px;max-width:calc(100vw - 48px);
+  background:var(--surface2);
+  border:1px solid var(--border);
+  border-radius:6px;overflow:hidden;
+  box-shadow:0 8px 40px rgba(0,0,0,0.5),0 0 0 1px rgba(0,229,255,0.06);
+  transform:translateY(20px) scale(0.96);opacity:0;
+  transition:all 0.3s cubic-bezier(0.34,1.56,0.64,1);
+  pointer-events:none;
+}
+#notif-popup.show{transform:translateY(0) scale(1);opacity:1;pointer-events:all}
+#notif-popup::before{
+  content:'';display:block;height:2px;
+  background:linear-gradient(90deg,transparent,var(--accent),var(--purple),transparent);
+}
+.npop-header{
+  display:flex;align-items:center;gap:10px;
+  padding:12px 14px 8px;
+  border-bottom:1px solid var(--border2);
+}
+.npop-source-icon{font-size:24px;line-height:1;flex-shrink:0}
+.npop-source-meta{flex:1;min-width:0}
+.npop-source-name{font-family:'Share Tech Mono',monospace;font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:var(--text);line-height:1.2}
+.npop-source-type{font-size:10px;color:var(--dim);letter-spacing:0.06em;margin-top:2px}
+.npop-prio-badge{
+  font-family:'Share Tech Mono',monospace;font-size:9px;letter-spacing:0.1em;
+  padding:3px 8px;border-radius:2px;flex-shrink:0;
+}
+.npop-dismiss{background:none;border:none;color:var(--dim);cursor:pointer;font-size:14px;padding:2px 4px;flex-shrink:0;transition:color 0.15s}
+.npop-dismiss:hover{color:var(--text)}
+.npop-body{padding:12px 14px}
+.npop-title{
+  font-family:'Rajdhani',sans-serif;font-size:16px;font-weight:700;
+  color:var(--text);line-height:1.3;margin-bottom:6px;letter-spacing:0.02em;
+}
+.npop-message{
+  font-family:'Rajdhani',sans-serif;font-size:13px;font-weight:400;
+  color:var(--dim);line-height:1.6;letter-spacing:0.02em;
+}
+.npop-footer{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:8px 14px 12px;
+  border-top:1px solid var(--border2);
+}
+.npop-ts{font-family:'Share Tech Mono',monospace;font-size:8px;color:var(--dim);letter-spacing:0.14em}
+.npop-status{font-family:'Share Tech Mono',monospace;font-size:8px;letter-spacing:0.14em}
+@keyframes urgentBorderPulse{0%,100%{box-shadow:0 8px 40px rgba(0,0,0,0.5),0 0 0 1px rgba(255,59,59,0.06)}50%{box-shadow:0 8px 40px rgba(255,59,59,0.25),0 0 0 2px rgba(255,59,59,0.4)}}
+#notif-popup.urgent-pulse{border-color:rgba(255,59,59,0.5)!important;animation:urgentBorderPulse 1s ease-in-out infinite}
+/* ── SIM NOTIFICATION FEED ── */
+#sim-feed-panel{
+  background:var(--surface);border:1px solid var(--border);border-radius:4px;
+  overflow:hidden;display:none;
+}
+#sim-feed-panel.active{display:block}
+#sim-feed-panel::before{
+  content:'';display:block;height:1px;
+  background:linear-gradient(90deg,transparent,var(--green),transparent);opacity:0.5;
+}
+.sim-feed-header{
+  display:flex;align-items:center;gap:8px;padding:9px 14px;
+  background:rgba(0,230,118,0.04);border-bottom:1px solid var(--border2);
+}
+.sim-feed-title{font-family:'Share Tech Mono',monospace;font-size:9px;letter-spacing:0.24em;color:var(--green);text-transform:uppercase;flex:1}
+.sim-feed-dot{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 6px var(--green);animation:blink 0.9s infinite;flex-shrink:0}
+.sim-feed-count{font-family:'Orbitron',monospace;font-size:12px;font-weight:700;color:var(--green)}
+.sim-feed-scroll{max-height:180px;overflow-y:auto;display:flex;flex-direction:column;gap:0;padding:4px 0}
+.sim-feed-scroll::-webkit-scrollbar{width:2px}
+.sim-feed-scroll::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+.sim-feed-item{
+  display:flex;align-items:center;gap:8px;
+  padding:7px 14px;border-bottom:1px solid var(--border2);
+  font-size:11px;font-weight:500;animation:slideIn 0.2s ease;
+  transition:background 0.2s;
+}
+.sim-feed-item:last-child{border-bottom:none}
+.sim-feed-item:hover{background:rgba(255,255,255,0.02)}
+.sim-feed-item.prio-URGENT{background:rgba(255,59,59,0.04);border-left:2px solid var(--red)}
+.sim-feed-item.prio-HIGH{background:rgba(255,179,0,0.03);border-left:2px solid var(--amber)}
+.sim-feed-icon{font-size:14px;flex-shrink:0;line-height:1}
+.sim-feed-msg{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text)}
+.sim-feed-prio{font-family:'Share Tech Mono',monospace;font-size:7px;letter-spacing:0.1em;padding:2px 5px;border-radius:2px;flex-shrink:0}
+.sim-feed-prio.URGENT{background:rgba(255,59,59,0.15);color:#ff6b6b;border:1px solid rgba(255,59,59,0.3)}
+.sim-feed-prio.HIGH{background:rgba(255,179,0,0.12);color:var(--amber);border:1px solid rgba(255,179,0,0.25)}
+.sim-feed-ts{font-family:'Share Tech Mono',monospace;font-size:8px;color:var(--dim);flex-shrink:0}
+@media(max-width:960px){.shell{grid-template-columns:1fr}.gauge-cluster{grid-template-columns:1fr 1fr}.sidebar{border-top:1px solid var(--border)}}
+</style>
+</head>
+<body>
+<canvas id="bg-canvas"></canvas>
+<div id="scanlines"></div>
+<canvas id="particle-canvas"></canvas>
+
+<div class="bracket tl"></div>
+<div class="bracket tr"></div>
+<div class="bracket bl"></div>
+<div class="bracket br"></div>
+
+<div id="alert-banner">
+  <div class="alert-dot"></div>
+  <span id="alert-text">⚡ HIGH PRIORITY ALERT — FORCED DELIVERY ACTIVE</span>
+  <span style="margin-left:auto;cursor:pointer;opacity:0.6" onclick="hideAlert()">✕ DISMISS</span>
+</div>
+
+<div class="topbar">
+  <div class="logo">
+    <div class="logo-pulse"></div>
+    SND·SYS — SMART NOTIFICATION DELIVERY
+  </div>
+  <div class="topbar-right">
+    <div style="display:flex;align-items:center;gap:6px">
+      <div class="srv-dot"></div>
+      SERVER · localhost:8000
+    </div>
+    <span id="clock">--:--:--</span>
+    <span id="uptime-display" style="color:var(--dim)">UP 0s</span>
+    <button class="mode-toggle" onclick="toggleTheme()" id="theme-btn">☽ DARK</button>
+  </div>
+</div>
+
+<div class="shell">
+  <div class="main-col">
+
+    <!-- TELEMETRY GAUGES -->
+    <div>
+      <div class="sec-label">Live Vehicle Telemetry</div>
+      <div class="gauge-cluster">
+        <div class="gauge-card" id="gc-speed">
+          <div class="gauge-card-label">Speed</div>
+          <div style="display:flex;align-items:center;gap:10px">
+            <svg width="70" height="70" viewBox="0 0 70 70">
+              <circle class="ring-track" cx="35" cy="35" r="28" stroke-dasharray="176" stroke-dashoffset="0"/>
+              <circle class="ring-fill" id="speed-ring" cx="35" cy="35" r="28" stroke="var(--cyan)" stroke-dasharray="176" stroke-dashoffset="176"/>
+            </svg>
+          </div>
+          <div class="gauge-card-val" id="speed-val">0</div>
+          <div class="gauge-card-unit">KM/H</div>
+        </div>
+
+        <div class="gauge-card">
+          <div class="gauge-card-label">Signal</div>
+          <div class="sig-bars" id="sig-bars" style="margin:8px 0">
+            <div class="sig-bar" style="height:18%"></div>
+            <div class="sig-bar" style="height:32%"></div>
+            <div class="sig-bar" style="height:46%"></div>
+            <div class="sig-bar" style="height:62%"></div>
+            <div class="sig-bar" style="height:78%"></div>
+            <div class="sig-bar" style="height:95%"></div>
+          </div>
+          <div class="gauge-card-val" id="sig-val">40</div>
+          <div class="gauge-card-unit">% SIGNAL</div>
+        </div>
+
+        <div class="gauge-card">
+          <div class="gauge-card-label">Queue</div>
+          <div style="display:flex;gap:10px;align-items:center;margin:8px 0">
+            <div style="text-align:center">
+              <div style="font-family:'Orbitron',monospace;font-size:20px;font-weight:700;color:var(--amber);line-height:1" id="q-pend">0</div>
+              <div style="font-size:8px;color:var(--dim);letter-spacing:.14em;margin-top:2px">WAIT</div>
+            </div>
+            <div style="width:1px;height:28px;background:var(--border)"></div>
+            <div style="text-align:center">
+              <div style="font-family:'Orbitron',monospace;font-size:20px;font-weight:700;color:var(--green);line-height:1" id="q-deliv">0</div>
+              <div style="font-size:8px;color:var(--dim);letter-spacing:.14em;margin-top:2px">DONE</div>
+            </div>
+          </div>
+          <div class="gauge-card-val" id="q-total">0</div>
+          <div class="gauge-card-unit">TOTAL SENT</div>
+        </div>
+
+        <div class="gauge-card">
+          <div class="gauge-card-label">Efficiency</div>
+          <div style="margin:4px 0">
+            <svg width="60" height="60" viewBox="0 0 60 60">
+              <circle class="ring-track" cx="30" cy="30" r="24" stroke-dasharray="150" stroke-dashoffset="0"/>
+              <circle class="ring-fill" id="eff-ring" cx="30" cy="30" r="24" stroke="var(--green)" stroke-dasharray="150" stroke-dashoffset="150"/>
+              <text class="ring-text" x="30" y="30" style="font-size:10px;fill:var(--text)" id="eff-pct">0%</text>
+            </svg>
+          </div>
+          <div class="gauge-card-unit">DELIVERY RATE</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- VEHICLE HEALTH -->
+    <div class="panel">
+      <div class="sec-label">Vehicle Health</div>
+      <div class="health-grid">
+        <div class="health-item">
+          <div class="health-icon">⛽</div>
+          <div class="health-info">
+            <div class="health-name">FUEL</div>
+            <div class="health-bar-track"><div class="health-bar-fill" id="hb-fuel" style="width:72%;background:var(--green)"></div></div>
+          </div>
+          <div class="health-val" id="hv-fuel">72%</div>
+        </div>
+        <div class="health-item">
+          <div class="health-icon">🌡</div>
+          <div class="health-info">
+            <div class="health-name">ENGINE TEMP</div>
+            <div class="health-bar-track"><div class="health-bar-fill" id="hb-temp" style="width:45%;background:var(--cyan)"></div></div>
+          </div>
+          <div class="health-val" id="hv-temp">89°C</div>
+        </div>
+        <div class="health-item">
+          <div class="health-icon">🔋</div>
+          <div class="health-info">
+            <div class="health-name">BATTERY</div>
+            <div class="health-bar-track"><div class="health-bar-fill" id="hb-bat" style="width:88%;background:var(--green)"></div></div>
+          </div>
+          <div class="health-val" id="hv-bat">12.4V</div>
+        </div>
+        <div class="health-item">
+          <div class="health-icon">🔘</div>
+          <div class="health-info">
+            <div class="health-name">TYRE PSI</div>
+            <div class="health-bar-track"><div class="health-bar-fill" id="hb-tyre" style="width:82%;background:var(--cyan)"></div></div>
+          </div>
+          <div class="health-val" id="hv-tyre">34 PSI</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CONTROLS -->
+    <div>
+      <div class="sec-label">Control Panel</div>
+      <div class="ctrl-row">
+        <button class="hud-btn grn-btn" onclick="accelerate()">▲ Accelerate</button>
+        <button class="hud-btn red-btn" onclick="brake()">▼ Brake</button>
+        <button class="hud-btn amber-btn" onclick="updateNetwork()">◈ Cycle Network</button>
+        <button class="hud-btn purple-btn" onclick="batchFlush()">⇶ Batch Flush</button>
+        <button class="hud-btn" id="sim-btn" onclick="toggleSim()">▶ Drive Sim</button>
+      </div>
+    </div>
+
+    <!-- VEHICLE COMPONENTS -->
+    <div class="panel" id="components-panel">
+      <div class="sec-label">Autonomous Vehicle — Component Bus</div>
+      <div id="comp-grid" style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px"></div>
+      <!-- Active component message picker -->
+      <div id="comp-msg-area" style="display:none">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+          <div style="font-family:'Share Tech Mono',monospace;font-size:9px;letter-spacing:0.2em;color:var(--dim)" id="comp-msg-label">SELECT MESSAGE</div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <div id="ai-prio-badge" style="display:flex;align-items:center;gap:5px;padding:3px 8px;border:1px solid rgba(0,229,255,0.18);border-radius:2px;background:rgba(255,255,255,0.03);font-family:'Share Tech Mono',monospace;font-size:9px;letter-spacing:0.12em;color:var(--dim)">
+              <span id="ai-prio-icon">🤖</span><span id="ai-prio-text">AI</span>
+            </div>
+            <div id="delivery-pred-badge" style="display:none;align-items:center;gap:5px;padding:3px 10px;border:1px solid rgba(255,179,0,0.3);border-radius:2px;background:rgba(255,179,0,0.07);font-family:'Share Tech Mono',monospace;font-size:9px;letter-spacing:0.10em;color:var(--amber)">
+              <span>⏱</span><span id="delivery-pred-text">~?</span>
+            </div>
+          </div>
+        </div>
+        <div id="comp-msg-list" style="display:flex;flex-direction:column;gap:5px;max-height:160px;overflow-y:auto"></div>
+        <div style="margin-top:8px;display:flex;gap:8px">
+          <button class="hud-btn" onclick="emitSelectedMsg()" id="emit-btn" style="flex:2">→ Emit Message</button>
+          <button class="hud-btn amber-btn" onclick="autoEmitAll()" style="flex:1;font-size:10px">⟳ Auto-Emit All</button>
+          <button class="hud-btn" onclick="clearCompSelection()" style="flex:0.6;font-size:10px;opacity:0.6">✕</button>
+        </div>
+      </div>
+      <!-- Delivery prediction panel for pending queue -->
+      <div id="delivery-pred-summary" style="margin-top:10px;padding:8px 12px;background:rgba(255,179,0,0.05);border:1px solid rgba(255,179,0,0.15);border-radius:3px;display:none">
+        <div style="display:flex;align-items:center;gap:8px;font-family:'Share Tech Mono',monospace;font-size:9px;letter-spacing:0.14em">
+          <span style="color:var(--amber)">⏱ DELIVERY PREDICTION</span>
+          <span id="pred-detail" style="color:var(--dim)">Calculating…</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- SERVER APPS -->
+    <div class="panel" id="server-apps-panel">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+        <div class="sec-label" style="margin-bottom:0">Server Computer &mdash; Installed Apps</div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <div id="app-imp-filter-badge" style="font-family:'Share Tech Mono',monospace;font-size:8px;color:var(--red);letter-spacing:0.12em;padding:2px 7px;border:1px solid rgba(255,59,59,0.3);border-radius:2px;background:rgba(255,59,59,0.06)">⚠ ALERTS SHOWN</div>
+          <div style="font-family:'Share Tech Mono',monospace;font-size:8px;color:var(--purple);letter-spacing:0.1em;padding:2px 7px;border:1px solid rgba(179,136,255,0.25);border-radius:2px;">SERVER &rarr; BUS</div>
+        </div>
+      </div>
+      <!-- App icon tiles — 3-col grid matching component bus style -->
+      <div id="app-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:0"></div>
+
+      <!-- App detail panel — shown when an icon tile is clicked -->
+      <div id="app-detail-area">
+        <div class="app-detail-header">
+          <div class="app-detail-icon" id="app-detail-icon">—</div>
+          <div class="app-detail-meta">
+            <div class="app-detail-name" id="app-detail-name" style="color:var(--purple)">APP NAME</div>
+            <div class="app-detail-full" id="app-detail-full">Full name</div>
+          </div>
+          <div id="app-ai-prio-badge" style="display:flex;align-items:center;gap:5px;padding:3px 8px;border:1px solid rgba(179,136,255,0.25);border-radius:2px;background:rgba(179,136,255,0.04);font-family:'Share Tech Mono',monospace;font-size:9px;letter-spacing:0.12em;color:var(--purple)">
+            <span id="app-ai-prio-icon">&#x1F916;</span><span id="app-ai-prio-text">AI PRIO</span>
+          </div>
+        </div>
+        <div class="app-detail-msgs" id="app-detail-msgs"></div>
+        <div class="app-detail-actions">
+          <button class="hud-btn purple-btn" onclick="emitAppMsg()" style="flex:2">&rarr; Send Selected</button>
+          <button class="hud-btn amber-btn" onclick="autoEmitAllApps()" style="flex:1;font-size:10px">&#x27F3; Blast All</button>
+          <button class="hud-btn" onclick="clearAppSelection()" style="flex:0.6;font-size:10px;opacity:0.6">&#x2715;</button>
+        </div>
+      </div>
+      <!-- Legacy hidden elements for JS compat -->
+      <div id="app-msg-area" style="display:none">
+        <div id="app-msg-label" style="display:none"></div>
+      </div>
+    </div>
+
+    <!-- ROUTE -->
+    <div>
+      <div class="sec-label">Drive Route — Signal Coverage Map</div>
+      <div class="route-track" id="route-track">
+        <div class="route-car" id="route-car" style="left:8px">🚗</div>
+      </div>
+      <div style="display:flex;justify-content:space-between;margin-top:5px;font-family:'Share Tech Mono',monospace;font-size:8px;color:var(--dim);letter-spacing:.15em">
+        <span>● DEAD ZONE</span><span>◑ COVERAGE GAP</span><span>● URBAN</span><span>● OPEN ROAD</span>
+      </div>
+    </div>
+
+    <!-- DRIVE SIM LIVE NOTIFICATION FEED -->
+    <div id="sim-feed-panel">
+      <div class="sim-feed-header">
+        <div class="sim-feed-dot"></div>
+        <span class="sim-feed-title">⟳ Drive Sim — Live Alert Feed</span>
+        <span class="sim-feed-count" id="sim-feed-count">0</span>
+      </div>
+      <div class="sim-feed-scroll" id="sim-feed-list"></div>
+    </div>
+
+    <!-- NOTIFICATION SUMMARY -->
+    <div id="notif-summary" class="open">
+      <div class="ns-header" onclick="document.getElementById('notif-summary').classList.toggle('open')">
+        <span class="ns-title">⊞ Notification Queue Summary</span>
+        <span class="ns-total-badge" id="ns-total">0</span>
+        <span style="font-family:'Share Tech Mono',monospace;font-size:8px;color:var(--dim);letter-spacing:0.1em">QUEUED</span>
+        <span class="ns-caret">▾</span>
+      </div>
+      <div class="ns-body">
+        <!-- Priority breakdown -->
+        <div class="ns-grid">
+          <div class="ns-stat"><div class="ns-stat-val" id="ns-urgent" style="color:var(--red)">0</div><div class="ns-stat-lbl">Urgent</div></div>
+          <div class="ns-stat"><div class="ns-stat-val" id="ns-high"   style="color:var(--amber)">0</div><div class="ns-stat-lbl">High</div></div>
+          <div class="ns-stat"><div class="ns-stat-val" id="ns-normal" style="color:var(--cyan)">0</div><div class="ns-stat-lbl">Normal</div></div>
+          <div class="ns-stat"><div class="ns-stat-val" id="ns-low"    style="color:var(--dim)">0</div><div class="ns-stat-lbl">Low</div></div>
+        </div>
+        <!-- Status bars -->
+        <div class="ns-breakdown" id="ns-breakdown">
+          <div class="ns-row">
+            <span class="ns-row-label">PENDING</span>
+            <div class="ns-bar-track"><div class="ns-bar-fill" id="nsb-pending" style="width:0%;background:var(--amber)"></div></div>
+            <span class="ns-bar-count" id="nsc-pending">0</span>
+          </div>
+          <div class="ns-row">
+            <span class="ns-row-label">DELIVERED</span>
+            <div class="ns-bar-track"><div class="ns-bar-fill" id="nsb-delivered" style="width:0%;background:var(--green)"></div></div>
+            <span class="ns-bar-count" id="nsc-delivered">0</span>
+          </div>
+          <div class="ns-row">
+            <span class="ns-row-label">FROM APPS</span>
+            <div class="ns-bar-track"><div class="ns-bar-fill" id="nsb-apps" style="width:0%;background:var(--purple)"></div></div>
+            <span class="ns-bar-count" id="nsc-apps">0</span>
+          </div>
+          <div class="ns-row">
+            <span class="ns-row-label">FROM COMP</span>
+            <div class="ns-bar-track"><div class="ns-bar-fill" id="nsb-comp" style="width:0%;background:var(--cyan)"></div></div>
+            <span class="ns-bar-count" id="nsc-comp">0</span>
+          </div>
+        </div>
+        <!-- Per-source chip breakdown -->
+        <div class="ns-source-grid" id="ns-source-grid"></div>
+      </div>
+    </div>
+
+    <!-- QUEUES -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+      <div>
+        <div class="sec-label">Pending Queue</div>
+        <div class="notif-scroll" id="pending-list"><div class="empty">— QUEUE CLEAR —</div></div>
+      </div>
+      <div>
+        <div class="sec-label">Delivered</div>
+        <div class="notif-scroll" id="delivered-list"><div class="empty">— NO DELIVERIES —</div></div>
+      </div>
+    </div>
+
+    <!-- SIGNAL HISTORY -->
+    <div class="panel">
+      <div class="sec-label">Signal Strength History</div>
+      <div class="sparkline-wrap">
+        <canvas id="spark-canvas"></canvas>
+      </div>
+      <div style="display:flex;justify-content:space-between;margin-top:4px;font-family:'Share Tech Mono',monospace;font-size:8px;color:var(--dim)">
+        <span>60s AGO</span><span id="avg-sig-lbl">AVG: 40%</span><span>NOW</span>
+      </div>
+    </div>
+
+    <!-- LOG -->
+    <div>
+      <div class="sec-label">Server Log</div>
+      <div class="log-box" id="log-box">
+        <div class="log-line c">[BOOT] SND·SYS v2.0 online · API Key: Team201A · Retry: 5000ms</div>
+        <div class="log-line g">[INIT] Queue manager initialized · Threshold: 60%</div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+
+    <div class="side-panel">
+      <div class="side-title">Network Status</div>
+      <div class="kv-row"><span class="kv-key">Strength</span><span class="kv-val cyan" id="sb-sig">40%</span></div>
+      <div class="kv-row"><span class="kv-key">Zone</span><span class="kv-val amber" id="sb-zone">COVERAGE GAP</span></div>
+      <div class="kv-row"><span class="kv-key">Mode</span><span class="kv-val amber" id="sb-mode">DEFERRED</span></div>
+      <div class="kv-row"><span class="kv-key">Retry in</span><span class="kv-val" id="sb-retry">5.0s</span></div>
+      <div class="kv-row"><span class="kv-key">Avg Latency</span><span class="kv-val" id="sb-latency">—</span></div>
+    </div>
+
+    <div class="side-panel">
+      <div class="side-title">Session Stats</div>
+      <div class="stat-row">
+        <div class="stat-card"><div class="stat-val" id="s-total">0</div><div class="stat-lbl">Total</div></div>
+        <div class="stat-card"><div class="stat-val" style="color:var(--amber)" id="s-pend">0</div><div class="stat-lbl">Waiting</div></div>
+        <div class="stat-card"><div class="stat-val" style="color:var(--green)" id="s-deliv">0</div><div class="stat-lbl">Done</div></div>
+      </div>
+    </div>
+
+    <div class="side-panel">
+      <div class="side-title">Delivery Efficiency</div>
+      <div class="eff-wrap">
+        <svg width="64" height="64" viewBox="0 0 64 64">
+          <circle class="ring-track" cx="32" cy="32" r="26" stroke-dasharray="163" stroke-dashoffset="0"/>
+          <circle class="ring-fill" id="eff-ring2" cx="32" cy="32" r="26" stroke="var(--green)" stroke-dasharray="163" stroke-dashoffset="163"/>
+          <text class="ring-text" x="32" y="32" style="font-size:11px;font-weight:700;fill:var(--text)" id="eff-pct2">0%</text>
+        </svg>
+        <div class="eff-label-group">
+          <div class="eff-big" id="eff-big">0%</div>
+          <div class="eff-sub">DELIVERED</div>
+          <div style="font-size:10px;color:var(--dim);margin-top:3px">of all messages</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- NETWORK HEATMAP -->
+    <div class="side-panel">
+      <div class="side-title">Network Heat Map</div>
+      <div class="heatmap-grid" id="heatmap"></div>
+    </div>
+
+    <div class="side-panel" style="flex:1;overflow:hidden;display:flex;flex-direction:column">
+      <div class="side-title">Activity Timeline</div>
+      <div id="timeline" style="overflow-y:auto;flex:1">
+        <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--dim);padding:10px 0;text-align:center;letter-spacing:.18em">— AWAITING EVENTS —</div>
+      </div>
+    </div>
+
+    <div class="side-panel">
+      <div class="side-title">System Config</div>
+      <div class="kv-row"><span class="kv-key">Endpoint</span><span class="kv-val" style="font-size:9px;color:var(--cyan)">localhost:8000</span></div>
+      <div class="kv-row"><span class="kv-key">API Key</span><span class="kv-val" style="font-size:9px">Team201A</span></div>
+      <div class="kv-row"><span class="kv-key">Threshold</span><span class="kv-val cyan">60%</span></div>
+      <div class="kv-row"><span class="kv-key">Uptime</span><span class="kv-val green" id="sb-uptime">0s</span></div>
+    </div>
+
+  </div>
+</div>
+
+<div id="notif-popup">
+  <div class="npop-header">
+    <div class="npop-source-icon" id="npop-icon">📡</div>
+    <div class="npop-source-meta">
+      <div class="npop-source-name" id="npop-source">SOURCE</div>
+      <div class="npop-source-type" id="npop-type">Server App</div>
+    </div>
+    <div class="npop-prio-badge" id="npop-prio-badge">🔴 URGENT</div>
+    <button class="npop-dismiss" onclick="dismissPopup()">✕</button>
+  </div>
+  <div class="npop-body">
+    <div class="npop-title" id="npop-title">Notification Title</div>
+    <div class="npop-message" id="npop-message">Notification body text goes here.</div>
+  </div>
+  <div class="npop-footer">
+    <span class="npop-ts" id="npop-ts">--:--:--</span>
+    <span class="npop-status" id="npop-status" style="color:var(--amber)">● QUEUED</span>
+  </div>
+</div>
+
+<div id="toast">→ NOTIFICATION DISPATCHED</div>
+
+<script>
+/* ═══════════════════════════════════════════
+   STATE
+═══════════════════════════════════════════ */
+const API_BASE = 'http://127.0.0.1:8000';
+const API_KEY  = "Team201A";
+function addLog(message) {
+  const logBox = document.getElementById("log-box");
+
+  if (!logBox) return;
+
+  const line = document.createElement("div");
+  line.className = "log-line c";
+  line.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+
+  logBox.appendChild(line);
+
+  // auto scroll
+  logBox.scrollTop = logBox.scrollHeight;
+}
+function updateSignalUI(signal) {
+  const sigVal = document.getElementById("sig-val");
+  const sbSig  = document.getElementById("sb-sig");
+
+  if (!sigVal || !sbSig) return;
+
+  let percent = 0;
+
+  if (signal === "GREEN") percent = 90;
+  else if (signal === "YELLOW") percent = 50;
+  else percent = 10;
+
+  sigVal.textContent = percent;
+  sbSig.textContent = percent + "%";
+}
+function addNotificationToUI(title, type="pending") {
+  const list = document.getElementById(
+    type === "pending" ? "pending-list" : "delivered-list"
+  );
+
+  if (!list) return;
+
+  const card = document.createElement("div");
+  card.className = `notif-card ${type}`;
+
+  card.innerHTML = `
+    <div class="notif-msg">${title}</div>
+    <div class="pill ${type}">${type.toUpperCase()}</div>
+  `;
+
+  list.appendChild(card);
+}
+// Connect to backend WebSocket
+const ws = new WebSocket("ws://127.0.0.1:8000/ws");
+
+ws.onopen = () => {
+  console.log("✅ WebSocket connected");
+};
+
+ws.onmessage = (event) => {
+  const msg = JSON.parse(event.data);
+
+  // 🔹 NEW notification created
+  if (msg.event === "notification_created") {
+    addLog(`[NEW] ${msg.data.title}`);
+    addNotificationToUI(msg.data.title, "pending");
+  }
+
+  // 🔹 Notification delivered
+  else if (msg.event === "notification_delivered") {
+    addLog(`[DELIVERED] ${msg.data.title}`);
+    addNotificationToUI(msg.data.title, "delivered");
+  }
+
+  // 🔹 Location / signal update
+  else if (msg.event === "position_update") {
+    updateSignalUI(msg.data.signal);
+  }
+
+  // 🔥 NEW: Deferred (no signal)
+  else if (msg.event === "notification_deferred") {
+    addLog(`[DEFERRED] Waiting for signal`);
+  }
+
+  // 🔥 NEW: Retrying delivery
+  else if (msg.event === "notification_retrying") {
+    addLog(`[RETRY] Attempt ${msg.data.attempt} in ${msg.data.delay_s}s`);
+  }
+
+  // 🔥 NEW: Failed after retries
+  else if (msg.event === "notification_failed") {
+    addLog(`[FAILED] ${msg.data.title}`);
+  }
+
+  // 🔹 Optional: signal transitions
+  else if (msg.event === "signal_transition") {
+    addLog(`[SIGNAL] ${msg.data.from} → ${msg.data.to}`);
+  }
+
+  // 🔹 Debug fallback (optional)
+  else {
+    console.log("Unknown WS event:", msg);
+  }
+};
+
+let state = {
+  speed:0, signal:40,
+  notifications:[], simRunning:false, simInterval:null,
+  simStep:0, idCtr:1, retryCountdown:5,
+  sigHistory:[], latencies:[],
+  health:{fuel:72,temp:89,bat:88,tyre:82},
+  startTime:Date.now(),
+  simPattern:[20,12,8,5,10,18,30,55,70,85,90,88,75,40,15,5,65,85,95,90,85,70,40,20,10,80,95]
+};
+let simMsgIdx=0;
+const ROUTE_SEGS=20;
+const SIM_MSGS=[
+  {m:'Speed alert: 90 km/h zone'},
+  {m:'Engine temp nominal'},
+  {m:'Fuel level: 30%'},
+  {m:'OTA update available'},
+  {m:'Service due in 200 km'},
+  {m:'Obstacle detected — braking'},
+  {m:'Lane departure warning'},
+  {m:'Tyre pressure low — FL'},
+  {m:'Battery: 11.9V — check'},
+  {m:'GPS signal acquired'},
+];
+
+/* ═══════════════════════════════════════════
+   ANIMATED BACKGROUND — GLOBE NETWORK
+═══════════════════════════════════════════ */
+const bgCanvas = document.getElementById('bg-canvas');
+const bgCtx = bgCanvas.getContext('2d');
+let bgW, bgH;
+
+// ── Detect system theme preference ──
+const _sysPref = window.matchMedia('(prefers-color-scheme: dark)');
+let _manualTheme = null; // null = follow system
+let theme = _sysPref.matches ? 'dark' : 'light';
+document.documentElement.setAttribute('data-theme', theme);
+document.addEventListener('DOMContentLoaded', () => {
+  const btn = document.getElementById('theme-btn');
+  if (btn) btn.textContent = theme === 'dark' ? '☽ DARK' : '☀ LIGHT';
+});
+_sysPref.addEventListener('change', e => {
+  if (_manualTheme === null) {
+    theme = e.matches ? 'dark' : 'light';
+    document.documentElement.setAttribute('data-theme', theme);
+    const btn = document.getElementById('theme-btn');
+    if (btn) btn.textContent = theme === 'dark' ? '☽ DARK' : '☀ LIGHT';
+  }
+});
+
+function resizeBg(){
+  bgW = bgCanvas.width = window.innerWidth;
+  bgH = bgCanvas.height = window.innerHeight;
+}
+window.addEventListener('resize', resizeBg);
+resizeBg();
+
+// ── Globe parameters ──
+let globeRot = 0;
+const GLOBE_R_FRAC = 0.44; // globe radius as fraction of min(W,H)
+
+// City nodes (lat °, lng °, label)
+const CITY_NODES = [
+  [40.7, -74.0,'NYC'],[51.5,-0.1,'LON'],[48.9,2.3,'PAR'],
+  [35.7,139.7,'TYO'],[22.3,114.2,'HKG'],[-33.9,151.2,'SYD'],
+  [55.8,37.6,'MSC'],[19.1,72.9,'MUM'],[-23.5,-46.6,'SAO'],
+  [37.8,-122.4,'SFO'],[1.3,103.8,'SIN'],[52.5,13.4,'BER'],
+  [25.0,55.0,'DXB'],[-26.2,28.0,'JNB'],[39.9,116.4,'PEK'],
+  [55.7,12.6,'CPH'],[41.0,29.0,'IST'],[-34.6,-58.4,'BUE'],
+];
+
+// Connection pairs (indices into CITY_NODES)
+const CONNECTIONS = [
+  [0,1],[0,9],[1,2],[1,6],[1,11],[2,12],[3,4],[3,14],[4,10],
+  [5,10],[5,7],[6,11],[6,14],[7,12],[8,0],[9,0],[10,3],[11,16],
+  [12,7],[13,7],[14,3],[15,11],[16,2],[17,8],[0,16],[5,13],
+  [4,7],[1,15],[6,16],[2,11],
+];
+
+// Floating satellite nodes (orbit params)
+const SATELLITES = Array.from({length:8},(_,i)=>({
+  angle: (i/8)*Math.PI*2,
+  speed: 0.003 + Math.random()*0.004,
+  orbitR: 0, // computed per frame
+  orbitTilt: Math.random()*0.5+0.1,
+  phase: Math.random()*Math.PI*2,
+}));
+
+// Background stars
+const BG_STARS = Array.from({length:220},()=>({
+  x: Math.random(), y: Math.random(),
+  r: Math.random()*1.2+0.2,
+  op: Math.random()*0.5+0.15,
+  tw: Math.random()*Math.PI*2,
+}));
+
+// Packet animations along connections
+const PACKETS = [];
+function spawnPacket(){
+  const ci = Math.floor(Math.random()*CONNECTIONS.length);
+  PACKETS.push({ ci, t:0, speed:0.004+Math.random()*0.006, rev:Math.random()<0.5 });
+}
+for(let i=0;i<12;i++) spawnPacket();
+
+// Convert lat/lng + rotation to projected 2D coords
+function project(latDeg, lngDeg, rotation, cx, cy, R){
+  const lat = latDeg * Math.PI/180;
+  const lng = (lngDeg * Math.PI/180) + rotation;
+  const x3 = Math.cos(lat)*Math.sin(lng);
+  const y3 = -Math.sin(lat);
+  const z3 = Math.cos(lat)*Math.cos(lng);
+  return { x: cx + x3*R, y: cy + y3*R, z: z3, visible: z3 > -0.2 };
+}
+
+// Draw a great-circle arc between two projected points
+function drawArc(ctx, p1, p2, color, width){
+  ctx.beginPath();
+  ctx.moveTo(p1.x, p1.y);
+  // Simple cubic bezier with control point pushed outward
+  const mx=(p1.x+p2.x)/2, my=(p1.y+p2.y)/2;
+  const dx=mx-p1.x, dy=my-p1.y;
+  const len=Math.sqrt(dx*dx+dy*dy);
+  const cx2=mx + (-dy/len)*len*0.25;
+  const cy2=my + (dx/len)*len*0.25;
+  ctx.quadraticCurveTo(cx2,cy2,p2.x,p2.y);
+  ctx.strokeStyle=color;
+  ctx.lineWidth=width;
+  ctx.stroke();
+}
+
+function drawBg(ts){
+  bgCtx.clearRect(0,0,bgW,bgH);
+  const cx = bgW*0.5, cy = bgH*0.5;
+  const R = Math.min(bgW,bgH)*GLOBE_R_FRAC;
+  globeRot += 0.0015;
+
+  // ── Palette ──
+  const isDark = theme === 'dark';
+  const bg1 = isDark ? '#020610' : '#daeaf8';
+  const bg2 = isDark ? '#061228' : '#eef5fd';
+  const nodeColor  = isDark ? 'rgba(255,160,30,1)'     : 'rgba(210,110,0,1)';
+  const connColor  = isDark ? 'rgba(255,140,20,0.22)'  : 'rgba(210,100,0,0.28)';
+  const connHot    = isDark ? 'rgba(255,160,30,0.5)'   : 'rgba(210,110,0,0.55)';
+  const gridColor  = isDark ? 'rgba(0,180,220,0.07)'   : 'rgba(0,100,200,0.08)';
+  const globeEdge  = isDark ? 'rgba(0,180,255,0.55)'   : 'rgba(0,120,220,0.4)';
+  const glowInner  = isDark ? 'rgba(0,100,200,0.18)'   : 'rgba(0,120,220,0.12)';
+  const satColor   = isDark ? 'rgba(255,160,30,0.85)'  : 'rgba(210,110,0,0.9)';
+  const satLine    = isDark ? 'rgba(255,150,20,0.15)'  : 'rgba(200,100,0,0.2)';
+  const pktColor   = isDark ? '#ffaa1e'                : '#d4780a';
+  const starColor  = isDark ? 'rgba(180,210,255,'      : 'rgba(100,140,200,';
+
+  // ── Background gradient ──
+  const bgGrad = bgCtx.createLinearGradient(0,0,bgW,bgH);
+  bgGrad.addColorStop(0, bg1);
+  bgGrad.addColorStop(1, bg2);
+  bgCtx.fillStyle = bgGrad;
+  bgCtx.fillRect(0,0,bgW,bgH);
+
+  // ── Stars / dots (dark) or soft specks (light) ──
+  BG_STARS.forEach(s=>{
+    s.tw += 0.018;
+    const op = isDark ? s.op + Math.sin(s.tw)*0.12 : s.op*0.35;
+    bgCtx.beginPath();
+    bgCtx.arc(s.x*bgW, s.y*bgH, s.r, 0, Math.PI*2);
+    bgCtx.fillStyle = starColor + op + ')';
+    bgCtx.fill();
+  });
+
+  // ── Subtle hex/grid texture overlay ──
+  if(isDark){
+    bgCtx.strokeStyle='rgba(0,100,150,0.04)';
+    bgCtx.lineWidth=0.5;
+    const gs=60;
+    for(let x=0;x<bgW;x+=gs){ bgCtx.beginPath();bgCtx.moveTo(x,0);bgCtx.lineTo(x,bgH);bgCtx.stroke();}
+    for(let y=0;y<bgH;y+=gs){ bgCtx.beginPath();bgCtx.moveTo(0,y);bgCtx.lineTo(bgW,y);bgCtx.stroke();}
+  }
+
+  // ── Atmospheric glow behind globe ──
+  const aura = bgCtx.createRadialGradient(cx,cy,R*0.3,cx,cy,R*1.8);
+  aura.addColorStop(0, glowInner);
+  aura.addColorStop(0.5, isDark?'rgba(0,60,120,0.07)':'rgba(0,80,160,0.05)');
+  aura.addColorStop(1,'transparent');
+  bgCtx.fillStyle=aura;
+  bgCtx.beginPath(); bgCtx.arc(cx,cy,R*1.8,0,Math.PI*2); bgCtx.fill();
+
+  // ── Globe body ──
+  const globeGrad = bgCtx.createRadialGradient(cx-R*0.3,cy-R*0.3,R*0.1,cx,cy,R);
+  if(isDark){
+    globeGrad.addColorStop(0,'rgba(10,40,100,0.55)');
+    globeGrad.addColorStop(0.5,'rgba(5,20,55,0.5)');
+    globeGrad.addColorStop(1,'rgba(2,8,25,0.7)');
+  } else {
+    globeGrad.addColorStop(0,'rgba(180,220,255,0.45)');
+    globeGrad.addColorStop(0.5,'rgba(160,200,240,0.35)');
+    globeGrad.addColorStop(1,'rgba(120,170,220,0.45)');
+  }
+  bgCtx.beginPath(); bgCtx.arc(cx,cy,R,0,Math.PI*2);
+  bgCtx.fillStyle=globeGrad; bgCtx.fill();
+
+  // ── Clip to globe for grid lines ──
+  bgCtx.save();
+  bgCtx.beginPath(); bgCtx.arc(cx,cy,R,0,Math.PI*2); bgCtx.clip();
+
+  // Latitude lines
+  bgCtx.strokeStyle=gridColor; bgCtx.lineWidth=0.8;
+  for(let lat=-75;lat<=75;lat+=15){
+    const y0 = cy - Math.sin(lat*Math.PI/180)*R;
+    const rx = Math.cos(lat*Math.PI/180)*R;
+    bgCtx.beginPath(); bgCtx.ellipse(cx, y0, rx, rx*0.25, 0, 0, Math.PI*2);
+    bgCtx.stroke();
+  }
+  // Longitude lines
+  for(let lng=0;lng<180;lng+=20){
+    const a1=(lng*Math.PI/180)+globeRot, a2=a1+Math.PI;
+    bgCtx.beginPath();
+    bgCtx.ellipse(cx,cy,Math.abs(Math.cos(a1))*R,R,0,0,Math.PI*2);
+    bgCtx.stroke();
+  }
+  bgCtx.restore();
+
+  // ── Globe edge glow ──
+  bgCtx.beginPath(); bgCtx.arc(cx,cy,R,0,Math.PI*2);
+  bgCtx.strokeStyle=globeEdge; bgCtx.lineWidth=1.5; bgCtx.stroke();
+
+  // ── Inner specular highlight ──
+  const specGrad=bgCtx.createRadialGradient(cx-R*0.35,cy-R*0.35,0,cx-R*0.2,cy-R*0.2,R*0.55);
+  specGrad.addColorStop(0,isDark?'rgba(120,200,255,0.08)':'rgba(255,255,255,0.2)');
+  specGrad.addColorStop(1,'transparent');
+  bgCtx.save(); bgCtx.beginPath(); bgCtx.arc(cx,cy,R,0,Math.PI*2); bgCtx.clip();
+  bgCtx.fillStyle=specGrad; bgCtx.fillRect(cx-R,cy-R,R*2,R*2);
+  bgCtx.restore();
+
+  // ── Project all city nodes ──
+  const projected = CITY_NODES.map(([lat,lng])=>project(lat,lng,globeRot,cx,cy,R));
+
+  // ── Draw connections ──
+  CONNECTIONS.forEach(([a,b])=>{
+    const p1=projected[a], p2=projected[b];
+    if(!p1.visible || !p2.visible) return;
+    const alpha = Math.min(p1.z,p2.z)*0.8;
+    bgCtx.beginPath();
+    bgCtx.moveTo(p1.x,p1.y);
+    const mx=(p1.x+p2.x)/2, my=(p1.y+p2.y)/2;
+    const dx=mx-cx, dy=my-cy;
+    const dist=Math.sqrt(dx*dx+dy*dy)||1;
+    const qx=mx+dx/dist*R*0.08, qy=my+dy/dist*R*0.08;
+    bgCtx.quadraticCurveTo(qx,qy,p2.x,p2.y);
+    const _ca=isDark?'0.22)':'0.28)';
+    bgCtx.strokeStyle=connColor.replace(_ca,`${alpha*0.28})`);
+    bgCtx.lineWidth=0.8;
+    bgCtx.stroke();
+  });
+
+  // ── Animate packets ──
+  PACKETS.forEach((pkt,i)=>{
+    pkt.t += pkt.speed;
+    if(pkt.t > 1){ pkt.t=0; if(Math.random()<0.3){const ci=Math.floor(Math.random()*CONNECTIONS.length);pkt.ci=ci;} }
+    const [a,b]=CONNECTIONS[pkt.ci];
+    const p1=projected[a], p2=projected[b];
+    if(!p1.visible||!p2.visible) return;
+    const t=pkt.rev?1-pkt.t:pkt.t;
+    const mx=(p1.x+p2.x)/2, my=(p1.y+p2.y)/2;
+    const dx=mx-cx, dy=my-cy;
+    const dist=Math.sqrt(dx*dx+dy*dy)||1;
+    const qx=mx+dx/dist*R*0.08, qy=my+dy/dist*R*0.08;
+    const ot=1-t;
+    const px=ot*ot*p1.x+2*ot*t*qx+t*t*p2.x;
+    const py=ot*ot*p1.y+2*ot*t*qy+t*t*p2.y;
+    // Glow trail
+    const grad=bgCtx.createRadialGradient(px,py,0,px,py,6);
+    grad.addColorStop(0, isDark?'rgba(255,160,30,0.9)':'rgba(210,110,0,0.88)');
+    grad.addColorStop(1,'transparent');
+    bgCtx.beginPath(); bgCtx.arc(px,py,6,0,Math.PI*2);
+    bgCtx.fillStyle=grad; bgCtx.fill();
+    bgCtx.beginPath(); bgCtx.arc(px,py,2,0,Math.PI*2);
+    bgCtx.fillStyle=pktColor; bgCtx.fill();
+  });
+
+  // ── Draw city nodes ──
+  projected.forEach((p,i)=>{
+    if(!p.visible) return;
+    const alpha=Math.max(0,p.z);
+    // Outer ring pulse
+    const pulse=0.5+0.5*Math.sin(ts*0.002+i*0.7);
+    bgCtx.beginPath(); bgCtx.arc(p.x,p.y,(4+pulse*3),0,Math.PI*2);
+    bgCtx.fillStyle=isDark?`rgba(255,150,20,${alpha*0.15})`:`rgba(210,110,0,${alpha*0.13})`;
+    bgCtx.fill();
+    // Core dot
+    bgCtx.beginPath(); bgCtx.arc(p.x,p.y,2.5,0,Math.PI*2);
+    bgCtx.fillStyle=isDark?`rgba(255,160,30,${alpha})`:`rgba(215,110,0,${alpha})`;
+    bgCtx.fill();
+    // Inner bright dot
+    bgCtx.beginPath(); bgCtx.arc(p.x,p.y,1,0,Math.PI*2);
+    bgCtx.fillStyle=isDark?`rgba(255,220,150,${alpha})`:`rgba(255,255,255,${alpha*0.9})`;
+    bgCtx.fill();
+  });
+
+  // ── Orbiting satellites ──
+  SATELLITES.forEach((sat,i)=>{
+    sat.angle += sat.speed;
+    const orbitR = R*1.25;
+    const sx = cx + Math.cos(sat.angle)*orbitR;
+    const sy = cy + Math.sin(sat.angle)*orbitR*sat.orbitTilt;
+    // Line to nearest node
+    let nearest=projected[0], minD=Infinity;
+    projected.forEach(p=>{ if(!p.visible)return; const d=(p.x-sx)**2+(p.y-sy)**2; if(d<minD){minD=d;nearest=p;} });
+    bgCtx.beginPath(); bgCtx.moveTo(sx,sy); bgCtx.lineTo(nearest.x,nearest.y);
+    bgCtx.strokeStyle=satLine; bgCtx.lineWidth=0.6; bgCtx.stroke();
+    // Satellite dot with glow
+    bgCtx.beginPath(); bgCtx.arc(sx,sy,4,0,Math.PI*2);
+    bgCtx.fillStyle=isDark?'rgba(255,150,20,0.1)':'rgba(200,100,0,0.12)'; bgCtx.fill();
+    bgCtx.beginPath(); bgCtx.arc(sx,sy,2,0,Math.PI*2);
+    bgCtx.fillStyle=satColor; bgCtx.fill();
+    bgCtx.beginPath(); bgCtx.arc(sx,sy,0.8,0,Math.PI*2);
+    bgCtx.fillStyle='rgba(255,255,255,0.9)'; bgCtx.fill();
+  });
+
+  // ── Floating ambient data-stream lines ──
+  for(let i=0;i<4;i++){
+    const phase=(ts*0.0003+i*0.25)%1;
+    const startX=bgW*(0.05+i*0.25), startY=bgH*(0.1+Math.sin(ts*0.0005+i)*0.05);
+    const endX=cx + (Math.cos(i*1.4+globeRot)*R*0.85);
+    const endY=cy + (Math.sin(i*1.4)*R*0.85*0.6);
+    const px2=startX+(endX-startX)*phase, py2=startY+(endY-startY)*phase;
+    const fade=Math.sin(phase*Math.PI);
+    bgCtx.beginPath();
+    bgCtx.moveTo(startX+(endX-startX)*Math.max(0,phase-0.15), startY+(endY-startY)*Math.max(0,phase-0.15));
+    bgCtx.lineTo(px2,py2);
+    bgCtx.strokeStyle=isDark?`rgba(255,140,20,${fade*0.38})`:`rgba(210,100,0,${fade*0.32})`;
+    bgCtx.lineWidth=1; bgCtx.stroke();
+    bgCtx.beginPath(); bgCtx.arc(px2,py2,2,0,Math.PI*2);
+    bgCtx.fillStyle=isDark?`rgba(255,160,30,${fade*0.85})`:`rgba(215,110,0,${fade*0.82})`; bgCtx.fill();
+  }
+
+  // ── Corner accent lines ──
+  bgCtx.strokeStyle=isDark?'rgba(255,150,20,0.07)':'rgba(200,100,0,0.07)';
+  bgCtx.lineWidth=1;
+  [[0,0,bgW*0.2,0],[0,0,0,bgH*0.15],[bgW,0,bgW*0.8,0],[bgW,0,bgW,bgH*0.15],
+   [0,bgH,bgW*0.2,bgH],[0,bgH,0,bgH*0.85],[bgW,bgH,bgW*0.8,bgH],[bgW,bgH,bgW,bgH*0.85]]
+  .forEach(([x1,y1,x2,y2])=>{
+    bgCtx.beginPath(); bgCtx.moveTo(x1,y1); bgCtx.lineTo(x2,y2); bgCtx.stroke();
+  });
+
+  requestAnimationFrame(drawBg);
+}
+requestAnimationFrame(drawBg);
+
+/* ═══════════════════════════════════════════
+   PARTICLE SYSTEM
+═══════════════════════════════════════════ */
+const pCanvas=document.getElementById('particle-canvas');
+const pCtx=pCanvas.getContext('2d');
+const particles=[];
+
+function resizeP(){pCanvas.width=window.innerWidth;pCanvas.height=window.innerHeight}
+window.addEventListener('resize',resizeP);resizeP();
+
+function spawnParticles(x,y,color,count=18){
+  for(let i=0;i<count;i++){
+    const angle=Math.random()*Math.PI*2;
+    const speed=Math.random()*3+1;
+    particles.push({x,y,vx:Math.cos(angle)*speed,vy:Math.sin(angle)*speed-1.5,life:1,color,r:Math.random()*2.5+1});
+  }
+}
+
+function animateParticles(){
+  pCtx.clearRect(0,0,pCanvas.width,pCanvas.height);
+  for(let i=particles.length-1;i>=0;i--){
+    const p=particles[i];
+    p.x+=p.vx;p.y+=p.vy;p.vy+=0.08;p.life-=0.025;
+    if(p.life<=0){particles.splice(i,1);continue}
+    pCtx.beginPath();pCtx.arc(p.x,p.y,p.r,0,Math.PI*2);
+    pCtx.fillStyle=p.color.replace(')',`,${p.life})`).replace('rgb','rgba');
+    pCtx.fill();
+  }
+  requestAnimationFrame(animateParticles);
+}
+animateParticles();
+
+/* ═══════════════════════════════════════════
+   THEME TOGGLE
+═══════════════════════════════════════════ */
+function toggleTheme(){
+  theme=theme==='dark'?'light':'dark';
+  _manualTheme=theme;
+  document.documentElement.setAttribute('data-theme',theme);
+  document.getElementById('theme-btn').textContent=theme==='dark'?'☽ DARK':'☀ LIGHT';
+}
+// Sync button label on page load
+(function(){ const b=document.getElementById('theme-btn'); if(b) b.textContent=theme==='dark'?'☽ DARK':'☀ LIGHT'; })();
+
+/* ═══════════════════════════════════════════
+   CLOCK + UPTIME
+═══════════════════════════════════════════ */
+function updateClock(){
+  const n=new Date();
+  document.getElementById('clock').textContent=n.toLocaleTimeString('en-GB',{hour12:false});
+  const up=Math.floor((Date.now()-state.startTime)/1000);
+  const upStr=up<60?up+'s':up<3600?Math.floor(up/60)+'m '+up%60+'s':Math.floor(up/3600)+'h '+Math.floor((up%3600)/60)+'m';
+  document.getElementById('uptime-display').textContent='UP '+upStr;
+  document.getElementById('sb-uptime').textContent=upStr;
+}
+setInterval(updateClock,1000);updateClock();
+
+/* ═══════════════════════════════════════════
+   HEATMAP
+═══════════════════════════════════════════ */
+function buildHeatmap(){
+  const hm=document.getElementById('heatmap');
+  hm.innerHTML='';
+  for(let i=0;i<30;i++){
+    const c=document.createElement('div');
+    c.className='hmap-cell';c.id='hc'+i;
+    c.style.background='rgba(255,255,255,0.05)';
+    hm.appendChild(c);
+  }
+}
+function updateHeatmap(){
+  const recent=state.sigHistory.slice(-30);
+  for(let i=0;i<30;i++){
+    const cell=document.getElementById('hc'+i);
+    if(!cell)continue;
+    const v=recent[i];
+    if(v===undefined){cell.style.background='rgba(255,255,255,0.04)';continue}
+    const col=v>70?`rgba(0,230,118,${0.15+v/100*0.5})`:v>40?`rgba(255,179,0,${0.15+v/100*0.5})`:`rgba(255,59,59,${0.15+v/100*0.5})`;
+    cell.style.background=col;
+  }
+}
+
+/* ═══════════════════════════════════════════
+   SPARKLINE
+═══════════════════════════════════════════ */
+function drawSparkline(){
+  const canvas=document.getElementById('spark-canvas');
+  const wrap=canvas.parentElement;
+  canvas.width=wrap.offsetWidth||300;
+  canvas.height=50;
+  const ctx=canvas.getContext('2d');
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  const hist=state.sigHistory.slice(-60);
+  if(hist.length<2)return;
+  const w=canvas.width,h=canvas.height;
+  // Threshold line
+  ctx.strokeStyle='rgba(255,179,0,0.3)';ctx.lineWidth=1;
+  ctx.setLineDash([4,4]);
+  const ty=h-(60/100)*h;
+  ctx.beginPath();ctx.moveTo(0,ty);ctx.lineTo(w,ty);ctx.stroke();
+  ctx.setLineDash([]);
+  // Fill
+  const grad=ctx.createLinearGradient(0,0,0,h);
+  grad.addColorStop(0,'rgba(0,229,255,0.25)');
+  grad.addColorStop(1,'rgba(0,229,255,0.01)');
+  ctx.beginPath();
+  hist.forEach((v,i)=>{
+    const x=i/(hist.length-1)*w;
+    const y=h-(v/100)*h;
+    i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+  });
+  ctx.lineTo(w,h);ctx.lineTo(0,h);ctx.closePath();
+  ctx.fillStyle=grad;ctx.fill();
+  // Line
+  ctx.beginPath();
+  ctx.strokeStyle='rgba(0,229,255,0.8)';ctx.lineWidth=1.5;
+  hist.forEach((v,i)=>{
+    const x=i/(hist.length-1)*w;
+    const y=h-(v/100)*h;
+    i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+  });
+  ctx.stroke();
+  // Avg
+  const avg=Math.round(hist.reduce((a,b)=>a+b,0)/hist.length);
+  document.getElementById('avg-sig-lbl').textContent=`AVG: ${avg}%`;
+}
+
+/* ═══════════════════════════════════════════
+   ROUTE BUILD
+═══════════════════════════════════════════ */
+function buildRoute(){
+  const track=document.getElementById('route-track');
+  const car=document.getElementById('route-car');
+  track.innerHTML='';track.appendChild(car);
+  const pattern=[0,0,0,1,1,2,2,2,3,3,3,3,2,2,1,0,0,3,3,3];
+  const cols=['rgba(200,50,50,0.5)','rgba(255,120,0,0.5)','rgba(255,179,0,0.5)','rgba(0,200,100,0.5)'];
+  for(let i=0;i<ROUTE_SEGS;i++){
+    const s=document.createElement('div');
+    s.className='route-seg';s.id='rs'+i;
+    s.style.background=cols[pattern[i]];
+    track.appendChild(s);
+  }
+}
+
+/* ═══════════════════════════════════════════
+   SIGNAL UI
+═══════════════════════════════════════════ */
+function updateSigBars(v){
+  const bars=document.querySelectorAll('#sig-bars .sig-bar');
+  const th=[10,25,40,55,70,85];
+  bars.forEach((b,i)=>{
+    b.classList.remove('on','warn','bad');
+    if(v>=th[i])b.classList.add(v>60?'on':v>30?'warn':'bad');
+  });
+}
+function updateSignalUI(){
+  const v=state.signal;
+  document.getElementById('sig-val').textContent=v;
+  updateSigBars(v);
+  const zone=v>70?'OPEN ROAD':v>40?'URBAN AREA':v>20?'COVERAGE GAP':'DEAD ZONE';
+  const mode=v>60?'LIVE':'DEFERRED';
+  document.getElementById('sb-sig').textContent=v+'%';
+  const zEl=document.getElementById('sb-zone');
+  zEl.textContent=zone;
+  zEl.className='kv-val '+(v>70?'green':v>40?'cyan':'amber');
+  const mEl=document.getElementById('sb-mode');
+  mEl.textContent=mode;mEl.className='kv-val '+(v>60?'green':'amber');
+  state.sigHistory.push(v);
+  if(state.sigHistory.length>120)state.sigHistory.shift();
+  updateHeatmap();drawSparkline();
+}
+
+/* ═══════════════════════════════════════════
+   SPEED UI + RING
+═══════════════════════════════════════════ */
+function updateSpeedUI(){
+  const v=state.speed;
+  document.getElementById('speed-val').textContent=v;
+  const pct=Math.min(v,220)/220;
+  const circ=176;
+  const ring=document.getElementById('speed-ring');
+  ring.style.strokeDashoffset=circ-(pct*circ);
+  ring.style.stroke=v>150?'var(--red)':v>80?'var(--amber)':'var(--cyan)';
+}
+
+/* ═══════════════════════════════════════════
+   EFFICIENCY
+═══════════════════════════════════════════ */
+function updateEfficiency(){
+  const total=state.notifications.length;
+  const deliv=state.notifications.filter(n=>n.status==='delivered').length;
+  const pct=total>0?Math.round((deliv/total)*100):0;
+  const circ1=150,circ2=163;
+  document.getElementById('eff-ring').style.strokeDashoffset=circ1-(pct/100*circ1);
+  document.getElementById('eff-ring2').style.strokeDashoffset=circ2-(pct/100*circ2);
+  document.getElementById('eff-ring').style.stroke=pct>75?'var(--green)':pct>40?'var(--amber)':'var(--red)';
+  document.getElementById('eff-ring2').style.stroke=pct>75?'var(--green)':pct>40?'var(--amber)':'var(--red)';
+  document.getElementById('eff-pct').textContent=pct+'%';
+  document.getElementById('eff-pct2').textContent=pct+'%';
+  document.getElementById('eff-big').textContent=pct+'%';
+  document.getElementById('eff-big').style.color=pct>75?'var(--green)':pct>40?'var(--amber)':'var(--red)';
+  // Avg latency
+  if(state.latencies.length>0){
+    const avg=Math.round(state.latencies.reduce((a,b)=>a+b,0)/state.latencies.length);
+    document.getElementById('sb-latency').textContent=avg+'ms';
+  }
+}
+
+/* ═══════════════════════════════════════════
+   VEHICLE HEALTH
+═══════════════════════════════════════════ */
+function updateHealth(){
+  const h=state.health;
+  const items=[
+    {id:'fuel',val:h.fuel,fmt:h.fuel+'%',col:h.fuel<25?'var(--red)':h.fuel<50?'var(--amber)':'var(--green)'},
+    {id:'temp',val:Math.min(h.temp/120*100,100),fmt:h.temp+'°C',col:h.temp>105?'var(--red)':h.temp>95?'var(--amber)':'var(--cyan)'},
+    {id:'bat',val:h.bat,fmt:(9+h.bat*0.037).toFixed(1)+'V',col:h.bat<30?'var(--red)':h.bat<60?'var(--amber)':'var(--green)'},
+    {id:'tyre',val:h.tyre,fmt:Math.round(28+h.tyre*0.08)+' PSI',col:h.tyre<40?'var(--red)':h.tyre<60?'var(--amber)':'var(--cyan)'},
+  ];
+  items.forEach(({id,val,fmt,col})=>{
+    document.getElementById('hb-'+id).style.width=val+'%';
+    document.getElementById('hb-'+id).style.background=col;
+    document.getElementById('hv-'+id).textContent=fmt;
+    document.getElementById('hv-'+id).style.color=col;
+  });
+}
+
+/* ═══════════════════════════════════════════
+   COUNTS + LISTS
+═══════════════════════════════════════════ */
+function updateCounts(){
+  const pend=state.notifications.filter(n=>n.status==='pending').length;
+  const deliv=state.notifications.filter(n=>n.status==='delivered').length;
+  const total=state.notifications.length;
+  document.getElementById('q-pend').textContent=pend;
+  document.getElementById('q-deliv').textContent=deliv;
+  document.getElementById('q-total').textContent=total;
+  document.getElementById('s-total').textContent=total;
+  document.getElementById('s-pend').textContent=pend;
+  document.getElementById('s-deliv').textContent=deliv;
+  updateEfficiency();
+}
+
+function renderLists(){
+  const pl=document.getElementById('pending-list');
+  const dl=document.getElementById('delivered-list');
+  const pend=state.notifications.filter(n=>n.status==='pending');
+  const deliv=[...state.notifications.filter(n=>n.status==='delivered')].reverse();
+  pl.innerHTML=pend.length?'':'<div class="empty">— QUEUE CLEAR —</div>';
+  [...pend].reverse().forEach(n=>{
+    const d=document.createElement('div');d.className='notif-card pending';
+    const age=Math.round((Date.now()-n.ts)/1000);
+    // Delivery prediction tag
+    let predTag='';
+    if(state.signal<=60){
+      const prio=n.priority||'NORMAL';
+      if(prio==='URGENT'||prio==='HIGH'){
+        predTag=`<span class="pred-tag" style="color:var(--red)">⚡FORCED</span>`;
+      } else {
+        let base=avgDeferSec||(state.signal<20?240:state.signal<50?120:45);
+        const scale=state.signal<20?3.0:state.signal<50?1.5:1.0;
+        predTag=`<span class="pred-tag">⏱${fmtDuration(Math.round(base*scale))}</span>`;
+      }
+    }
+    d.innerHTML=`<span class="notif-msg">${n.message}</span><span class="pill ${(n.priority||'normal').toLowerCase()}">${n.priority||'?'}</span><span class="pill pending">WAIT</span>${predTag}<span class="latency">${age}s</span>`;
+    pl.appendChild(d);
+  });
+  dl.innerHTML=deliv.length?'':'<div class="empty">— NO DELIVERIES —</div>';
+  deliv.slice(0,12).forEach(n=>{
+    const d=document.createElement('div');d.className='notif-card delivered';
+    const lat=n.latency?n.latency+'ms':'—';
+    d.innerHTML=`<span class="notif-msg">${n.message}</span><span class="pill ${(n.priority||'normal').toLowerCase()}">${n.priority||'?'}</span><span class="pill delivered">SENT</span><span class="latency">${lat}</span>`;
+    dl.appendChild(d);
+  });
+  updateCounts();
+  updateNotifSummary();
+}
+
+/* ═══════════════════════════════════════════
+   TIMELINE
+═══════════════════════════════════════════ */
+function addTimeline(n){
+  const tl=document.getElementById('timeline');
+  const empty=tl.querySelector('[style*="AWAITING"]');
+  if(empty)empty.remove();
+  const item=document.createElement('div');item.className='tl-item';
+  const ts=new Date().toLocaleTimeString('en-GB',{hour12:false});
+  item.innerHTML=`<div class="tl-dot ${n.status==='pending'?'p':'d'}"></div><span class="tl-msg">${n.message}</span><span class="tl-badge">${ts}</span>`;
+  tl.insertBefore(item,tl.firstChild);
+}
+
+/* ═══════════════════════════════════════════
+   LOG
+═══════════════════════════════════════════ */
+function log(msg,cls=''){
+  const lb=document.getElementById('log-box');
+  const ts=new Date().toLocaleTimeString('en-GB',{hour12:false});
+  const d=document.createElement('div');d.className='log-line '+cls;
+  d.textContent=`[${ts}] ${msg}`;
+  lb.appendChild(d);lb.scrollTop=lb.scrollHeight;
+}
+
+/* ═══════════════════════════════════════════
+   TOAST + ALERT
+═══════════════════════════════════════════ */
+function toast(msg){
+  const t=document.getElementById('toast');t.textContent=msg;
+  t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2400);
+}
+function showAlert(msg){
+  document.getElementById('alert-text').textContent='⚡ '+msg;
+  document.getElementById('alert-banner').classList.add('show');
+  setTimeout(hideAlert,4000);
+}
+function hideAlert(){document.getElementById('alert-banner').classList.remove('show')}
+
+/* ═══════════════════════════════════════════
+   SERVER DECISION
+═══════════════════════════════════════════ */
+function serverDecide(n){
+  if(n.priority==='URGENT'){
+    showAlert(`URGENT — "${n.message.slice(0,30)}" EMERGENCY DELIVERY`);
+    setTimeout(()=>deliver(n.id,'URGENT priority — emergency forced'),200);
+    // Resolve source info for popup
+    let srcIcon='⚡', srcName=n.component||'System', srcType='System Notification';
+    if(n.component){
+      if(n.component.startsWith('server:')){
+        const appId=n.component.split(':')[1];
+        const app=SERVER_APPS.find(a=>a.id===appId);
+        if(app){srcIcon=app.icon;srcName=app.name;srcType='Server App · Urgent';}
+      } else {
+        const comp=VEHICLE_COMPONENTS.find(c=>c.id===n.component);
+        if(comp){srcIcon=comp.icon;srcName=comp.name;srcType='AV Component · Urgent';}
+      }
+    }
+    showNotifPopup(n, srcIcon, srcName, srcType);
+  } else if(n.priority==='HIGH'){
+    showAlert(`HIGH PRIORITY — "${n.message.slice(0,30)}" FORCED DELIVERY`);
+    setTimeout(()=>deliver(n.id,'HIGH priority — forced'),350);
+  } else if(state.signal>60){
+    setTimeout(()=>deliver(n.id,`Signal ${state.signal}%`),420);
+  } else {
+    log(`[SERVER] id=${n.id} DEFERRED — signal ${state.signal}% < 60%`,'a');
+  }
+}
+
+function deliver(id,reason){
+  const n=state.notifications.find(x=>x.id===id);
+  if(!n||n.status==='delivered')return;
+  const lat=Date.now()-n.ts;
+  n.status='delivered';n.latency=lat;
+  state.latencies.push(lat);
+  if(state.latencies.length>50)state.latencies.shift();
+  log(`[DELIVER] id=${id} ✓ ${reason} (${lat}ms)`,'g');
+  addTimeline(n);
+  // Particle burst on delivery button area
+  const el=document.getElementById('q-deliv');
+  if(el){const r=el.getBoundingClientRect();spawnParticles(r.left+r.width/2,r.top+r.height/2,'rgb(0,230,118)',14)}
+  renderLists();
+}
+
+function processRetry(){
+  const pend=state.notifications.filter(n=>n.status==='pending');
+  if(!pend.length)return;
+  if(state.signal>60){
+    log(`[RETRY] Signal ${state.signal}% — flushing ${pend.length} deferred`,'g');
+    toast(`↑ FLUSHING ${pend.length} QUEUED`);
+    pend.forEach(n=>deliver(n.id,`retry, signal ${state.signal}%`));
+  }
+}
+
+/* ═══════════════════════════════════════════
+   CONTROLS
+═══════════════════════════════════════════ */
+function accelerate(){
+  state.speed=Math.min(state.speed+Math.floor(Math.random()*15+5),220);
+  updateSpeedUI();
+  state.health.temp=Math.min(120,state.health.temp+Math.random()*3);
+  state.health.fuel=Math.max(0,state.health.fuel-0.4);
+  updateHealth();
+  log(`[CTRL] ▲ Accelerate → ${state.speed} km/h`,'c');
+  fetch(`${API_BASE}/speed`,{method:'POST',headers:{'Content-Type':'application/json','x-api-key':API_KEY},body:JSON.stringify({speed:state.speed})}).catch(()=>{});
+}
+
+function brake(){
+  state.speed=Math.max(0,state.speed-10);
+  updateSpeedUI();
+  state.health.temp=Math.max(70,state.health.temp-1);
+  updateHealth();
+  log(`[CTRL] ▼ Brake → ${state.speed} km/h`,'c');
+}
+
+function updateNetwork(){
+  state.signal=Math.floor(Math.random()*80+15);
+  updateSignalUI();
+  log(`[NET] ◈ Signal cycled → ${state.signal}%`,state.signal>60?'g':'a');
+  fetch(`${API_BASE}/network`,{method:'POST',headers:{'Content-Type':'application/json','x-api-key':API_KEY},body:JSON.stringify({strength:state.signal})}).catch(()=>{});
+  processRetry();
+}
+
+function batchFlush(){
+  const pend=state.notifications.filter(n=>n.status==='pending');
+  if(!pend.length){toast('NO PENDING — QUEUE EMPTY');return}
+  log(`[BATCH] Force-flushing ${pend.length} notifications`,'p');
+  toast(`⇶ BATCH FLUSH — ${pend.length} MESSAGES`);
+  pend.forEach((n,i)=>setTimeout(()=>deliver(n.id,'batch flush override'),i*120));
+}
+
+/* ═══════════════════════════════════════════
+   VEHICLE COMPONENT DATASET
+═══════════════════════════════════════════ */
+const VEHICLE_COMPONENTS = [
+  { id:'ecu',  name:'ECU',    full:'Engine Control Unit',   icon:'⚙️',  color:'#00e5ff',
+    messages:[
+      {title:'Engine RPM spike detected',   body:'RPM exceeded 6800 — possible throttle sensor fault'},
+      {title:'Throttle response anomaly',   body:'Electronic throttle actuator response 340ms above baseline'},
+      {title:'Misfire detected — Cylinder 3', body:'Combustion misfire on cylinder 3, reducing power output'},
+      {title:'Engine temp critical',        body:'Coolant temperature at 118°C — thermal shutdown imminent'},
+      {title:'ECU self-test complete',      body:'All ECU modules nominal, firmware v4.2.1'},
+    ]},
+  { id:'lidar', name:'LIDAR', full:'LIDAR Sensor Array',    icon:'📡',  color:'#b388ff',
+    messages:[
+      {title:'Obstacle detected at 12m',    body:'Static obstacle in lane — emergency braking pre-armed'},
+      {title:'LIDAR calibration drift',     body:'Point cloud offset 2.4cm — recalibration recommended'},
+      {title:'Pedestrian trajectory conflict', body:'Predicted pedestrian path intersects route in 3.2s'},
+      {title:'LIDAR sensor occlusion',      body:'Front-left sensor partially occluded — reduced FOV 18°'},
+      {title:'360° scan nominal',           body:'All 128-beam LIDAR channels operational, 100ms refresh'},
+    ]},
+  { id:'gps',   name:'GPS/IMU', full:'GPS & Inertial Nav',  icon:'🛰️', color:'#00e676',
+    messages:[
+      {title:'GPS signal lost',             body:'Satellite fix dropped — switching to dead reckoning via IMU'},
+      {title:'Position accuracy degraded',  body:'HDOP 4.8 — position error ±8m, reducing autonomous speed'},
+      {title:'Route deviation detected',    body:'Vehicle 34m off planned route — recalculating trajectory'},
+      {title:'IMU calibration complete',    body:'Accelerometer and gyro bias corrected, accuracy ±0.02°'},
+      {title:'GPS fix acquired — 14 sats',  body:'RTK correction active, position accuracy ±2cm'},
+    ]},
+  { id:'brake', name:'Brake',  full:'Brake Control System', icon:'🔴',  color:'#ff3b3b',
+    messages:[
+      {title:'Emergency brake activated',   body:'AEB triggered — collision avoidance braking at 1.2G'},
+      {title:'Brake fluid pressure low',    body:'Hydraulic pressure 87 bar — below 95 bar threshold'},
+      {title:'Brake pad wear critical',     body:'Front-left pad at 2mm — immediate replacement required'},
+      {title:'ABS module fault',            body:'ABS solenoid valve 3 non-responsive — manual braking only'},
+      {title:'Brake temperature nominal',   body:'Rotor temperature 142°C, within safe operating range'},
+    ]},
+  { id:'bms',   name:'BMS',   full:'Battery Management',    icon:'🔋',  color:'#ffb300',
+    messages:[
+      {title:'Battery SOC critical — 8%',   body:'State of charge below minimum — initiating emergency stop'},
+      {title:'Cell voltage imbalance',      body:'Cell group 7 voltage 3.12V vs avg 3.67V — balancing needed'},
+      {title:'Battery temp elevated',       body:'Pack temperature 52°C — thermal management active'},
+      {title:'Charging port fault',         body:'Onboard charger communication failure — CAN bus timeout'},
+      {title:'BMS health check passed',     body:'All 96 cells nominal, SOH 94%, estimated range 280km'},
+    ]},
+  { id:'radar', name:'RADAR', full:'Radar Fusion Unit',     icon:'〰️', color:'#00e5ff',
+    messages:[
+      {title:'Vehicle ahead closing fast',  body:'Relative velocity -28 km/h at 6m — emergency brake armed'},
+      {title:'Radar interference detected', body:'Cross-talk from adjacent vehicle radar — filter activated'},
+      {title:'Blind spot object detected',  body:'Object in right blind spot, lane change blocked'},
+      {title:'Adaptive cruise disengaged',  body:'ACC deactivated — radar target lost in heavy rain'},
+      {title:'RADAR self-test passed',      body:'77GHz radar array nominal, range 200m, update rate 20Hz'},
+    ]},
+  { id:'tpms',  name:'TPMS',  full:'Tyre Pressure Monitor', icon:'🔘',  color:'#ff9100',
+    messages:[
+      {title:'Tyre pressure low — FL',      body:'Front-left at 24 PSI, recommended 32 PSI — stop advised'},
+      {title:'Rapid pressure loss — RR',    body:'Rear-right pressure drop 8 PSI/min — possible puncture'},
+      {title:'Tyre temp warning',           body:'Rear axle tyre temperature 98°C — reduce speed'},
+      {title:'TPMS sensor battery low',     body:'Front-right TPMS sensor battery at 12% — replace soon'},
+      {title:'All tyres nominal',           body:'FL:32 FR:31 RL:32 RR:31 PSI — within spec'},
+    ]},
+  { id:'adas',  name:'ADAS',  full:'Advanced Driver Assist', icon:'🤖', color:'#b388ff',
+    messages:[
+      {title:'Lane departure warning',      body:'Vehicle drifting left 0.3m — steering correction applied'},
+      {title:'Traffic sign recognition',    body:'Speed limit 40 km/h detected — cruise adjusted'},
+      {title:'Drowsiness alert',            body:'Driver attention score below threshold — rest recommended'},
+      {title:'ADAS camera obstruction',     body:'Forward camera partially blocked — clean windshield'},
+      {title:'Autopilot handoff requested', body:'Road conditions exceed system confidence — manual takeover'},
+    ]},
+];
+
+let selectedComp = null;
+let selectedMsg  = null;
+let selectedApp  = null;
+let selectedAppMsg = null;
+let avgDeferSec  = null; // from analytics, updated periodically
+
+/* ─── AI Priority (keyword rules mirror server) ─── */
+const URGENT_KW=['emergency','sos','critical','collision','crash','fire','brake failure','engine failure','airbag','accident','mayday','immediate','evacuate','911','aeb triggered','emergency brake','emergency stop',
+  /* CyberGuard */ 'intrusion attempt','exploit attempt','tamper event','malicious firmware',
+  /* V2X */        'intersection collision','emergency vehicle','braking hard','collision warning'];
+const HIGH_KW  =['low fuel','fuel warning','overheat','overheating','tire pressure','tyre pressure','oil pressure','battery','speed limit','road closed','detour','alert','warning','urgent','fault','anomaly','imbalance','obstruction','conflict','departure','violation','loss','drop','disengaged',
+  /* CyberGuard */ 'intrusion','malicious','firewall','certificate expir','replay attack','anomalous',
+  /* DataVault */  'quota critical','corrupted','sync failed','tamper',
+  /* V2X */        'hazard broadcast','school zone','signal phase','speed cap'];
+const LOW_KW   =['nominal','complete','passed','acquired','self-test','within spec','health check','calibration complete'];
+
+function aiGuessPriority(title, body){
+  const t=(title+' '+body).toLowerCase();
+  if(URGENT_KW.some(k=>t.includes(k)))return'URGENT';
+  if(HIGH_KW.some(k=>t.includes(k)))  return'HIGH';
+  if(LOW_KW.some(k=>t.includes(k)))   return'LOW';
+  return'NORMAL';
+}
+
+const PRIO_COLORS={URGENT:'var(--red)',HIGH:'var(--amber)',NORMAL:'var(--cyan)',LOW:'var(--dim)'};
+const PRIO_ICONS ={URGENT:'🔴',HIGH:'🟠',NORMAL:'🔵',LOW:'⚪'};
+
+function updateAIPrioBadge(title, body){
+  const p = aiGuessPriority(title, body);
+  const icon = document.getElementById('ai-prio-icon');
+  const txt  = document.getElementById('ai-prio-text');
+  const badge= document.getElementById('ai-prio-badge');
+  if(icon) icon.textContent = PRIO_ICONS[p];
+  if(txt)  txt.textContent  = p;
+  if(badge){ badge.style.borderColor=PRIO_COLORS[p]; badge.style.color=PRIO_COLORS[p]; }
+  return p;
+}
+
+/* ─── Delivery Prediction ─── */
+function fmtDuration(sec){
+  if(sec < 60)  return `~${sec}s`;
+  if(sec < 3600) return `~${Math.round(sec/60)} min`;
+  return `~${(sec/3600).toFixed(1)} hr`;
+}
+
+function updateDeliveryPredBadge(priority){
+  const badge = document.getElementById('delivery-pred-badge');
+  const txt   = document.getElementById('delivery-pred-text');
+  if(!badge || !txt) return;
+  if(state.signal > 60){
+    badge.style.display='none';
+    return;
+  }
+  // Use fetched avg_defer; fall back to heuristic
+  let base = avgDeferSec || (state.signal < 20 ? 240 : state.signal < 50 ? 120 : 45);
+  // URGENT/HIGH get delivered even on weak signal so show shorter wait
+  const scale = priority==='URGENT' ? 0 : priority==='HIGH' ? 0.3 : (state.signal < 20 ? 3.0 : state.signal < 50 ? 1.5 : 1.0);
+  if(scale === 0){ txt.textContent = 'FORCED NOW'; badge.style.borderColor='var(--red)'; badge.style.color='var(--red)'; }
+  else { txt.textContent = `deliver in ${fmtDuration(Math.round(base*scale))}`; badge.style.borderColor='var(--amber)'; badge.style.color='var(--amber)'; }
+  badge.style.display='flex';
+}
+
+function fetchAnalyticsPrediction(){
+  fetch(`${API_BASE}/analytics/delivery-prediction`,{headers:{'Authorization':'Bearer '+API_KEY}})
+    .then(r=>r.json())
+    .then(d=>{
+      if(d.avg_defer_duration_s) avgDeferSec = d.avg_defer_duration_s;
+      const pend = state.notifications.filter(n=>n.status==='pending').length;
+      const sumEl = document.getElementById('delivery-pred-summary');
+      const detEl = document.getElementById('pred-detail');
+      if(sumEl && detEl && pend > 0){
+        sumEl.style.display='block';
+        if(d.will_deliver_immediately){
+          detEl.textContent = `Signal good — ${pend} pending notification${pend>1?'s':''} will deliver immediately`;
+        } else {
+          detEl.textContent = `${pend} deferred · Est. delivery ${fmtDuration(d.estimated_delivery_s)} · Signal: ${d.signal_strength_pct}%`;
+        }
+      } else if(sumEl){ sumEl.style.display='none'; }
+    }).catch(()=>{});
+}
+setInterval(fetchAnalyticsPrediction, 6000);
+
+/* ─── Component Tile Builder ─── */
+function buildComponentGrid(){
+  const grid = document.getElementById('comp-grid');
+  if(!grid) return;
+  grid.innerHTML = '';
+  VEHICLE_COMPONENTS.forEach(comp=>{
+    const tile = document.createElement('div');
+    tile.className = 'comp-tile';
+    tile.id = 'tile-'+comp.id;
+    tile.style.setProperty('--comp-color', comp.color);
+    tile.innerHTML = `
+      <div class="comp-icon">${comp.icon}</div>
+      <div class="comp-name" style="color:${comp.color}">${comp.name}</div>
+      <div class="comp-status" id="status-${comp.id}">ONLINE</div>
+    `;
+    tile.onclick = () => selectComponent(comp);
+    grid.appendChild(tile);
+  });
+}
+
+function selectComponent(comp){
+  // Deselect all tiles
+  document.querySelectorAll('.comp-tile').forEach(t=>t.classList.remove('active'));
+  const tile = document.getElementById('tile-'+comp.id);
+  if(tile) tile.classList.add('active');
+  selectedComp = comp;
+  selectedMsg  = null;
+
+  // Show message area
+  const area  = document.getElementById('comp-msg-area');
+  const label = document.getElementById('comp-msg-label');
+  const list  = document.getElementById('comp-msg-list');
+  if(!area) return;
+  area.style.display = 'block';
+  label.textContent = `${comp.icon} ${comp.full} — SELECT MESSAGE`;
+  label.style.color = comp.color;
+
+  list.innerHTML = '';
+  comp.messages.forEach((m,i)=>{
+    const prio = aiGuessPriority(m.title, m.body);
+    const item = document.createElement('div');
+    item.className = 'comp-msg-item';
+    item.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:6px">
+        <div class="comp-msg-title">${m.title}</div>
+        <span style="font-family:'Share Tech Mono',monospace;font-size:8px;color:${PRIO_COLORS[prio]};flex-shrink:0">${PRIO_ICONS[prio]} ${prio}</span>
+      </div>
+      <div class="comp-msg-body">${m.body}</div>
+    `;
+    item.onclick = ()=>{
+      document.querySelectorAll('.comp-msg-item').forEach(x=>x.classList.remove('selected'));
+      item.classList.add('selected');
+      selectedMsg = m;
+      updateAIPrioBadge(m.title, m.body);
+      updateDeliveryPredBadge(prio);
+    };
+    list.appendChild(item);
+  });
+
+  // Reset badges
+  updateAIPrioBadge('','');
+  document.getElementById('delivery-pred-badge').style.display='none';
+}
+
+function clearCompSelection(){
+  selectedComp = null; selectedMsg = null;
+  document.querySelectorAll('.comp-tile').forEach(t=>t.classList.remove('active'));
+  const area = document.getElementById('comp-msg-area');
+  if(area) area.style.display='none';
+}
+
+function emitSelectedMsg(){
+  if(!selectedComp || !selectedMsg){ toast('SELECT A COMPONENT + MESSAGE'); return; }
+  const m = selectedMsg;
+  const prio = aiGuessPriority(m.title, m.body);
+  const n = {id:state.idCtr++, message:`[${selectedComp.name}] ${m.title}`, priority:prio, status:'pending', ts:Date.now(), component:selectedComp.id, body:m.body};
+  state.notifications.push(n);
+  log(`[${selectedComp.name}→BUS] 🤖 ${prio} · "${m.title}"`, 'c');
+  // Flash tile to signal emission
+  const tile = document.getElementById('tile-'+selectedComp.id);
+  if(tile){ tile.classList.add('fault'); setTimeout(()=>tile.classList.remove('fault'),800); }
+  document.getElementById('status-'+selectedComp.id).textContent='TX…';
+  setTimeout(()=>{ const s=document.getElementById('status-'+selectedComp.id); if(s)s.textContent='ONLINE'; },900);
+  addTimeline(n); renderLists(); serverDecide(n);
+  toast(`[${selectedComp.name}] → ${prio} · DISPATCHED`);
+  // Show notification popup
+  showNotifPopup(n, selectedComp.icon, selectedComp.name, 'AV Component Bus');
+  fetch(`${API_BASE}/send`,{method:'POST',headers:{'Content-Type':'application/json','x-api-key':API_KEY},
+    body:JSON.stringify({message:m.title, body:m.body, component:selectedComp.id})}).catch(()=>{});
+  fetchAnalyticsPrediction();
+}
+
+function autoEmitAll(){
+  // Round-robin: one message per component, staggered
+  VEHICLE_COMPONENTS.forEach((comp,ci)=>{
+    setTimeout(()=>{
+      const m = comp.messages[Math.floor(Math.random()*comp.messages.length)];
+      const prio = aiGuessPriority(m.title, m.body);
+      const n = {id:state.idCtr++, message:`[${comp.name}] ${m.title}`, priority:prio, status:'pending', ts:Date.now(), component:comp.id, body:m.body};
+      state.notifications.push(n);
+      log(`[AUTO·${comp.name}] 🤖 ${prio} · "${m.title}"`, 'p');
+      const tile = document.getElementById('tile-'+comp.id);
+      if(tile){ tile.classList.add('fault'); setTimeout(()=>tile.classList.remove('fault'),600); }
+      addTimeline(n); renderLists(); serverDecide(n);
+      // Show popup immediately for any URGENT message in the blast
+      if(prio==='URGENT') showNotifPopup(n, comp.icon, comp.name, 'AV Component · Auto Blast');
+    }, ci*300);
+  });
+  toast(`⟳ AUTO-EMIT — ${VEHICLE_COMPONENTS.length} COMPONENTS`);
+  setTimeout(fetchAnalyticsPrediction, VEHICLE_COMPONENTS.length*300+500);
+}
+
+function sendNotif(){
+  // Legacy compat: called by sim; just emits a plain message
+  if(!selectedMsg) return;
+  emitSelectedMsg();
+}
+
+/* ═══════════════════════════════════════════
+   DRIVE SIMULATION
+═══════════════════════════════════════════ */
+let _simNotifInterval = null;
+let _simNotifQueue    = [];  // pre-built pool of urgent+high messages from all sources
+let _simFeedCount     = 0;
+const SIM_NOTIF_INTERVAL_MS = 4200; // fire a notification every ~4.2s during sim
+
+function buildSimNotifPool(){
+  // Collect ALL urgent & high messages from both apps and components
+  _simNotifQueue = [];
+  SERVER_APPS.forEach(app=>{
+    app.messages.forEach((m,i)=>{
+      const prio = aiGuessPriority(m.title, m.body);
+      if(prio==='URGENT'||prio==='HIGH'){
+        _simNotifQueue.push({source:'app', app, m, i, prio});
+      }
+    });
+  });
+  VEHICLE_COMPONENTS.forEach(comp=>{
+    comp.messages.forEach((m,i)=>{
+      const prio = aiGuessPriority(m.title, m.body);
+      if(prio==='URGENT'||prio==='HIGH'){
+        _simNotifQueue.push({source:'comp', comp, m, i, prio});
+      }
+    });
+  });
+  // Shuffle so it feels organic
+  for(let i=_simNotifQueue.length-1;i>0;i--){
+    const j=Math.floor(Math.random()*(i+1));
+    [_simNotifQueue[i],_simNotifQueue[j]]=[_simNotifQueue[j],_simNotifQueue[i]];
+  }
+}
+
+function fireSimNotif(){
+  if(!_simNotifQueue.length) buildSimNotifPool(); // refill when exhausted
+  const pick = _simNotifQueue.shift();
+  if(!pick) return;
+
+  let n, srcIcon, srcName, srcType;
+
+  if(pick.source==='app'){
+    const {app, m, i, prio} = pick;
+    const fullTitle = `[${app.name}] ${m.title}`;
+    n = {id:state.idCtr++, message:fullTitle, priority:prio, status:'pending', ts:Date.now(), component:'server:'+app.id, body:m.body};
+    srcIcon=app.icon; srcName=app.name; srcType='Server App · Sim';
+    // Send to backend via sim batch endpoint
+    fetch(`${API_BASE}/sim/notifications`,{method:'POST',headers:{'Content-Type':'application/json','x-api-key':API_KEY},
+      body:JSON.stringify({notifications:[{title:fullTitle, body:m.body, source:'server:'+app.id, priority:prio}]})}).catch(()=>{});
+    log(`[SIM·${app.name}] 🤖 ${prio} · "${m.title}"`, 'p');
+    // Flash tile
+    const tile=document.getElementById('apptile-'+app.id);
+    if(tile){tile.classList.add('tx');setTimeout(()=>tile.classList.remove('tx'),700);}
+  } else {
+    const {comp, m, i, prio} = pick;
+    const fullTitle = `[${comp.name}] ${m.title}`;
+    n = {id:state.idCtr++, message:fullTitle, priority:prio, status:'pending', ts:Date.now(), component:comp.id, body:m.body};
+    srcIcon=comp.icon; srcName=comp.name; srcType='AV Component · Sim';
+    fetch(`${API_BASE}/sim/notifications`,{method:'POST',headers:{'Content-Type':'application/json','x-api-key':API_KEY},
+      body:JSON.stringify({notifications:[{title:fullTitle, body:m.body, source:'comp:'+comp.id, priority:prio}]})}).catch(()=>{});
+    log(`[SIM·${comp.name}] 🤖 ${prio} · "${m.title}"`, 'c');
+    // Flash tile
+    const tile=document.getElementById('tile-'+comp.id);
+    if(tile){tile.classList.add('fault');setTimeout(()=>tile.classList.remove('fault'),700);}
+  }
+
+  state.notifications.push(n);
+  addTimeline(n); renderLists(); serverDecide(n);
+  showNotifPopup(n, srcIcon, srcName, srcType);
+  addSimFeedItem(n, srcIcon, srcName);
+  fetchAnalyticsPrediction();
+}
+
+function addSimFeedItem(n, icon, name){
+  _simFeedCount++;
+  document.getElementById('sim-feed-count').textContent = _simFeedCount;
+  const list = document.getElementById('sim-feed-list');
+  const ts = new Date().toLocaleTimeString('en-GB',{hour12:false});
+  const item = document.createElement('div');
+  item.className = `sim-feed-item prio-${n.priority}`;
+  const prioClass = n.priority==='URGENT'?'URGENT':'HIGH';
+  item.innerHTML = `
+    <span class="sim-feed-icon">${icon}</span>
+    <span class="sim-feed-msg">${n.message}</span>
+    <span class="sim-feed-prio ${prioClass}">${n.priority==='URGENT'?'🔴':'🟠'} ${n.priority}</span>
+    <span class="sim-feed-ts">${ts}</span>
+  `;
+  list.insertBefore(item, list.firstChild);
+  // Keep max 30 items
+  while(list.children.length>30) list.removeChild(list.lastChild);
+}
+
+function startSimNotifEngine(){
+  buildSimNotifPool();
+  _simFeedCount = 0;
+  document.getElementById('sim-feed-count').textContent = '0';
+  document.getElementById('sim-feed-list').innerHTML = '';
+  document.getElementById('sim-feed-panel').classList.add('active');
+  // Fire first one after a short delay, then on interval
+  setTimeout(fireSimNotif, 1800);
+  _simNotifInterval = setInterval(fireSimNotif, SIM_NOTIF_INTERVAL_MS);
+}
+
+function stopSimNotifEngine(){
+  if(_simNotifInterval){ clearInterval(_simNotifInterval); _simNotifInterval=null; }
+  document.getElementById('sim-feed-panel').classList.remove('active');
+}
+
+function toggleSim(){
+  const btn=document.getElementById('sim-btn');
+  if(state.simRunning){
+    clearInterval(state.simInterval);state.simRunning=false;state.simStep=0;simMsgIdx=0;
+    btn.textContent='▶ Drive Sim';btn.classList.remove('active-sim');
+    stopSimNotifEngine();
+    log('[SIM] Simulation stopped','a');return;
+  }
+  state.simRunning=true;state.simStep=0;
+  btn.textContent='⏹ Stop Sim';btn.classList.add('active-sim');
+  startSimNotifEngine();
+  log('[SIM] Drive simulation started — vehicle on route · auto-alerts ACTIVE','g');
+  toast('DRIVE SIMULATION ACTIVE — AUTO-ALERTS ON');
+  state.simInterval=setInterval(()=>{
+    if(state.simStep>=state.simPattern.length){state.simStep=0;simMsgIdx=0}
+    const sig=state.simPattern[state.simStep];
+    const spd=Math.floor(Math.random()*60+30);
+    state.signal=sig;state.speed=spd;
+    state.health.fuel=Math.max(0,state.health.fuel-0.3);
+    state.health.temp=Math.min(115,state.health.temp+(Math.random()-0.4)*2);
+    state.health.tyre=Math.max(0,state.health.tyre-0.1);
+    updateSignalUI();updateSpeedUI();updateHealth();
+    // Car position
+    const pct=(state.simStep/(state.simPattern.length-1))*88;
+    const car=document.getElementById('route-car');
+    if(car)car.style.left=pct+'%';
+    // Highlight segment
+    const segIdx=Math.floor((state.simStep/state.simPattern.length)*ROUTE_SEGS);
+    document.querySelectorAll('.route-seg').forEach((s,i)=>{
+      s.style.opacity=i===segIdx?'1':'0.4';
+      s.style.boxShadow=i===segIdx?'0 0 6px rgba(0,229,255,0.4)':'none';
+    });
+    // Auto messages from random components
+    if(state.simStep%2===0&&simMsgIdx<SIM_MSGS.length){
+      const nm=SIM_MSGS[simMsgIdx++];
+      // Pick random component for this sim message
+      const comp = VEHICLE_COMPONENTS[Math.floor(Math.random()*VEHICLE_COMPONENTS.length)];
+      const prio=aiGuessPriority(nm.m, '');
+      const n={id:state.idCtr++,message:`[${comp.name}] ${nm.m}`,priority:prio,status:'pending',ts:Date.now(),component:comp.id};
+      state.notifications.push(n);
+      log(`[SIM·${comp.name}→BUS] 🤖 ${prio} · "${nm.m}"`, 'c');
+      const tile=document.getElementById('tile-'+comp.id);
+      if(tile){tile.classList.add('fault');setTimeout(()=>tile.classList.remove('fault'),600);}
+      addTimeline(n);renderLists();serverDecide(n);
+    }
+    processRetry();renderLists();
+    fetch(`${API_BASE}/network`,{method:'POST',headers:{'Content-Type':'application/json','x-api-key':API_KEY},body:JSON.stringify({strength:sig})}).catch(()=>{});
+    state.simStep++;
+  },1600);
+}
+
+/* ═══════════════════════════════════════════
+   RETRY TIMER
+═══════════════════════════════════════════ */
+setInterval(()=>{
+  state.retryCountdown--;
+  if(state.retryCountdown<=0){state.retryCountdown=5;processRetry()}
+  document.getElementById('sb-retry').textContent=state.retryCountdown+'.0s';
+},1000);
+
+/* ═══════════════════════════════════════════
+   BACKEND SYNC
+═══════════════════════════════════════════ */
+function fetchAndSync(){
+  fetch(`${API_BASE}/notifications`,{headers:{'x-api-key':API_KEY,'Authorization':'Bearer '+API_KEY}})
+    .then(r=>r.json())
+    .then(data=>{
+      if(!Array.isArray(data))return;
+      data.forEach(n=>{
+        if(!state.notifications.find(x=>x.id===n.id))
+          state.notifications.push({id:n.id||state.idCtr++,message:n.title||n.message,priority:n.priority,status:(n.status||'QUEUED').toLowerCase()==='delivered'?'delivered':'pending',ts:Date.now()});
+      });
+      renderLists();
+    }).catch(()=>{});
+}
+setInterval(fetchAndSync,8000);
+
+/* ═══════════════════════════════════════════
+   HEALTH DRIFT (simulation of real sensor)
+═══════════════════════════════════════════ */
+setInterval(()=>{
+  if(!state.simRunning){
+    state.health.temp+=(Math.random()-0.5)*0.5;
+    state.health.temp=Math.max(70,Math.min(115,state.health.temp));
+  }
+  updateHealth();
+  drawSparkline();
+},3000);
+
+
+/* ═══════════════════════════════════════════
+   SERVER APPS DATA
+═══════════════════════════════════════════ */
+const SERVER_APPS = [
+  { id:'whatsapp',  name:'WhatsApp',   full:'WhatsApp Messenger',            icon:'💬',  color:'#25D366', version:'2.24.8',
+    messages:[
+      {title:'New message from Fleet Coordinator', body:'Ravi: "AV-009 please divert — accident on OMR near Perungudi. Take service road."'},
+      {title:'Voice note received — Dispatcher',  body:'Dispatcher sent a 12s voice note. Transcription: "Confirm ETA to depot, over."'},
+      {title:'Group: AV Operations Chennai',      body:'3 new messages in group. Ranganathan: "Signal dead zone at NH-32 km 88 confirmed."'},
+      {title:'Emergency broadcast from Ops',      body:'URGENT — All units avoid Velachery flyover. Water logging reported. Alternate via 100ft road.'},
+      {title:'Delivery confirmation requested',   body:'Passenger Meera S. asking: "Are you 5 min away? Gate closes at 6 PM."'},
+      {title:'Media file received',               body:'Route supervisor shared updated depot map (PDF, 2.1 MB). Tap to download.'},
+      {title:'Message delivery failed',           body:'3 messages to Dispatcher undelivered. No signal since 14:22. Will retry on GREEN zone.'},
+    ]},
+  { id:'gmaps',     name:'Google Maps', full:'Google Maps Navigation',      icon:'📍',  color:'#4285F4', version:'11.112.0',
+    messages:[
+      {title:'Severe traffic — 34 min delay',     body:'OMR northbound blocked near Sholinganallur. Google Maps rerouting via SH-49. ETA updated.'},
+      {title:'Speed limit changed ahead',         body:'Entering school zone — limit drops to 25 km/h in 300m. Cruise control adjusting.'},
+      {title:'New fastest route available',       body:'Live traffic shows Inner Ring Road clear. Switch saves 11 min vs current route.'},
+      {title:'Destination: parking guidance',     body:'Approaching Chennai Central. Nearest open parking: Ripon Buildings lot, 180m ahead.'},
+      {title:'Road closure reported by users',    body:'5 users report Poonamallee High Rd closed at Koyambedu junction. Diversion active.'},
+      {title:'Offline maps expired',              body:'Tamil Nadu offline map pack expired. Reconnect to update (312 MB). Navigation using live data.'},
+      {title:'EV charging stop suggested',        body:'Battery 18%. Nearest fast charger: EVCS Velachery (4.2 km). Added as waypoint.'},
+    ]},
+  { id:'health',    name:'Health',     full:'Health & Vitals Monitor',      icon:'❤️',  color:'#FF3B30', version:'5.3.1',
+    messages:[
+      {title:'Driver heart rate elevated',        body:'Wearable reports HR 118 bpm for 4 min. Fatigue risk. Recommend 10-min rest stop.'},
+      {title:'Drowsiness score critical — 82%',   body:'Eye closure frequency high. Initiating cabin alert + reducing speed to 40 km/h.'},
+      {title:'Blood oxygen low — 93% SpO2',       body:'Driver SpO2 below 95%. Cabin ventilation increased. Alert sent to fleet health desk.'},
+      {title:'Stress index spike detected',       body:'HRV dropped sharply at 14:37. Possible road rage event. Logging for safety review.'},
+      {title:'Rest recommendation triggered',     body:'4.2h continuous driving detected. Nearest safe stop: Petrol bunk 1.8 km ahead.'},
+      {title:'Daily health summary',              body:'Driver Arjun K.: Steps 4,200 · Avg HR 74 bpm · Rest score 68%. Below weekly average.'},
+    ]},
+  { id:'news',      name:'News',       full:'Live News & Alerts Feed',      icon:'📰',  color:'#FF9500', version:'4.1.0',
+    messages:[
+      {title:'BREAKING: Road blocked — Chennai',  body:'NH-48 near Tambaram blocked due to protest. Expect 2h+ delays. Avoid zone.'},
+      {title:'Weather alert: Heavy rain warning', body:'IMD issues orange alert for Chennai district until 20:00. Visibility may drop below 50m.'},
+      {title:'Fuel price update',                 body:'Petrol ₹102.63/L (+₹1.20 from today). Diesel ₹89.44/L. Updated pump prices loaded.'},
+      {title:'Traffic regulation: odd-even today',body:'Odd-even vehicle restriction active in Chennai CBD 08:00–20:00. Route adjusted.'},
+      {title:'Accident report — live',            body:'2-vehicle collision on GST Road near Vandalur. Police on scene. Right lane closed.'},
+      {title:'VIP convoy movement alert',         body:'State convoy on Anna Salai 15:30–16:00. Signal holds at 3 junctions on your route.'},
+      {title:'Event crowd dispersal — Egmore',    body:'Post-event crowd near Egmore station until 22:00. Pedestrian density high. Caution.'},
+    ]},
+  { id:'os',        name:'OS',         full:'Operating System & Services',  icon:'🖥️',  color:'#8E8E93', version:'14.2.1',
+    messages:[
+      {title:'Critical security patch available', body:'CVE-2024-4771 kernel vulnerability. Patch 14.2.2 ready. Install at next safe stop.'},
+      {title:'Storage critically low — 2 GB free',body:'System drive at 98% capacity. Auto-purging old logs. Manual cleanup recommended.'},
+      {title:'Background process using high CPU', body:'NavCore process consuming 89% CPU for 3 min. Performance throttle applied.'},
+      {title:'Network interface failover',        body:'Primary 5G modem signal lost. Failover to LTE backup modem. Bandwidth reduced.'},
+      {title:'Scheduled reboot required',         body:'Kernel update pending reboot. Scheduled for vehicle shutdown at depot tonight.'},
+      {title:'Firewall rule updated',             body:'Inbound rule 47 modified by remote admin. CAN bridge port 8472 now blocked.'},
+      {title:'RAM pressure warning',              body:'Available RAM 340 MB. 6 background apps suspended. Recommend closing unused services.'},
+    ]},
+  { id:'weather',   name:'Weather',    full:'Weather & Environment App',    icon:'🌤️',  color:'#30B0C7', version:'3.8.4',
+    messages:[
+      {title:'Fog alert — visibility 40m ahead',  body:'Dense fog patch in 2.1 km on current route. Speed reduced to 30 km/h. Fog lights on.'},
+      {title:'Heavy rain starting in 8 min',      body:'IMD nowcast: 18mm/hr rain cell moving toward route. Wipers, lights activating.'},
+      {title:'Crosswind warning — bridge ahead',  body:'Wind gusts 62 km/h on Poonamallee bypass bridge. Lane centering assist engaged.'},
+      {title:'Road surface temperature: 61°C',    body:'Tyre heat risk on NH-48 tarmac. Tyre pressure monitoring elevated to 30s intervals.'},
+      {title:'Hail storm — 5 km radius',          body:'Hail reported near Ambattur. Recommend sheltered halt. Nearest covered stop: 900m.'},
+      {title:'Air quality index: 187 — Very Poor',body:'AQI 187 on route. Cabin air recirculation enabled. HEPA filter active.'},
+      {title:'Weather conditions nominal',        body:'Clear sky, 28°C, wind 12 km/h NE, humidity 58%. Optimal driving conditions.'},
+    ]},
+
+  /* ── NEW APPS ─────────────────────────────────────────── */
+  { id:'cyberguard', name:'CyberGuard', full:'CyberGuard — Vehicle Security Monitor', icon:'🛡️', color:'#EF4444', version:'2.1.0',
+    messages:[
+      {title:'Intrusion attempt blocked — CAN bus',   body:'Rogue frame injection detected on CAN-ID 0x7DF. Source isolated. Bus integrity verified. Incident logged.'},
+      {title:'Remote exploit attempt intercepted',    body:'Unauthorised OBD-II command sequence from external BT device. Connection terminated. Attacker MAC logged.'},
+      {title:'Anomalous ECU query pattern detected',  body:'ECU-0x18 received 140 unsolicited diagnostic requests in 2 s. Possible replay attack. Quarantine applied.'},
+      {title:'Malicious firmware update rejected',    body:'OTA package signature mismatch — SHA-256 checksum failed. Update blocked. Rolling back to v14.2.1.'},
+      {title:'TLS certificate expiring in 3 days',    body:'Fleet cloud certificate CN=snd-cloud.fleet expires 2024-12-28. Auto-renew scheduled for tonight.'},
+      {title:'Firewall rule violation — port 4444',   body:'Outbound connection attempt on port 4444 blocked. Process: navcore_helper. Flagged for security review.'},
+      {title:'Security scan complete — all clear',    body:'Full CAN bus + OBD-II + network stack scan passed. No active threats. Next scan: 08:00 tomorrow.'},
+    ]},
+
+  { id:'datavault',  name:'DataVault',  full:'DataVault — Secure On-Board Storage',   icon:'🗄️', color:'#6366F1', version:'1.7.3',
+    messages:[
+      {title:'Trip data sync failed — server timeout', body:'Upload of 284 MB trip log to fleet cloud timed out after 30 s. Will retry at next GREEN zone entry.'},
+      {title:'Storage quota critical — 94% used',      body:'On-board SSD at 94% capacity (118 GB / 128 GB). Oldest trips auto-archived. Manual purge recommended.'},
+      {title:'Encrypted backup initiated',             body:'AES-256 backup of sensor logs, dashcam footage and trip telemetry started. ETA 4 min. Do not power off.'},
+      {title:'Corrupted log segment detected',         body:'Segment /logs/trip-2024-12-24T14.bin CRC mismatch. Data may be incomplete. Re-syncing from cloud.'},
+      {title:'Dashcam footage auto-deleted',           body:'72 h retention policy applied. 48 clips (6.2 GB) from 2024-12-21 permanently deleted. Storage freed.'},
+      {title:'Tamper event — vault access denied',     body:'Unauthorised DataVault access attempt at 14:52:07. Wrong PIN ×3. Vault locked for 30 min. Alert sent to ops.'},
+      {title:'Daily sync complete — all logs uploaded', body:'Trip logs, health events and sensor snapshots synced to fleet cloud. 312 MB transferred. Integrity verified.'},
+    ]},
+
+  { id:'v2x',        name:'V2X',        full:'V2X — Vehicle-to-Everything Comms',     icon:'📡', color:'#10B981', version:'3.0.5',
+    messages:[
+      {title:'INTERSECTION COLLISION WARNING',         body:'Conflicting vehicle entering junction at 68 km/h on cross-street. AEB pre-armed. Slowing to 20 km/h now.'},
+      {title:'Emergency vehicle approaching — 340 m',  body:'Ambulance V2V beacon received. Priority corridor active. Moving to left lane. Hazard lights on.'},
+      {title:'School zone active — speed cap 25 km/h', body:'V2I signal from school-zone RSU ahead. Geo-fence speed cap applied. Zone exits in 800 m.'},
+      {title:'Road hazard broadcast — debris on road', body:'Truck broadcast debris alert at GPS 13.0142°N 80.2714°E. Switching to right lane. Hazard logged.'},
+      {title:'Traffic signal phase advisory',          body:'RSU reports green phase in 8 s at next junction. Speed advisory 34 km/h to catch green wave. Cruise adjusted.'},
+      {title:'V2V message — vehicle braking hard ahead',body:'Lead vehicle broadcast emergency brake event 180 m ahead. Pre-collision warning active. Gap increased to 4 s.'},
+      {title:'V2X link nominal — 12 peers visible',    body:'DSRC/C-V2X active. 12 nearby vehicles broadcasting. RSU coverage: 3 units. Latency 14 ms. All channels clear.'},
+    ]},
+];
+
+/* ═══════════════════════════════════════════
+   NOTIFICATION SUMMARY
+═══════════════════════════════════════════ */
+function updateNotifSummary(){
+  const all = state.notifications;
+  const total = all.length;
+  const pending = all.filter(n=>n.status==='pending').length;
+  const delivered = all.filter(n=>n.status==='delivered').length;
+  const fromApps = all.filter(n=>n.component&&n.component.startsWith('server:')).length;
+  const fromComp = all.filter(n=>n.component&&!n.component.startsWith('server:')).length;
+
+  // Priority counts
+  const urgent = all.filter(n=>n.priority==='URGENT').length;
+  const high   = all.filter(n=>n.priority==='HIGH').length;
+  const normal = all.filter(n=>n.priority==='NORMAL').length;
+  const low    = all.filter(n=>n.priority==='LOW').length;
+
+  // Update counters
+  document.getElementById('ns-total').textContent = pending;
+  document.getElementById('ns-urgent').textContent = urgent;
+  document.getElementById('ns-high').textContent   = high;
+  document.getElementById('ns-normal').textContent = normal;
+  document.getElementById('ns-low').textContent    = low;
+
+  // Status bars
+  const safeMax = Math.max(total, 1);
+  const setBar = (id, cntId, val, max) => {
+    const pct = Math.round((val/max)*100);
+    document.getElementById(id).style.width = pct+'%';
+    document.getElementById(cntId).textContent = val;
+  };
+  setBar('nsb-pending','nsc-pending',pending,safeMax);
+  setBar('nsb-delivered','nsc-delivered',delivered,safeMax);
+  setBar('nsb-apps','nsc-apps',fromApps,safeMax);
+  setBar('nsb-comp','nsc-comp',fromComp,safeMax);
+
+  // Per-source chips
+  const sourceGrid = document.getElementById('ns-source-grid');
+  if(!sourceGrid) return;
+  // Aggregate by component
+  const sourceCounts = {};
+  all.forEach(n=>{
+    if(!n.component) return;
+    // Resolve display info
+    let icon='📦', name=n.component;
+    if(n.component.startsWith('server:')){
+      const appId = n.component.split(':')[1];
+      const app = SERVER_APPS.find(a=>a.id===appId);
+      if(app){ icon=app.icon; name=app.name; }
+    } else {
+      const comp = VEHICLE_COMPONENTS.find(c=>c.id===n.component);
+      if(comp){ icon=comp.icon; name=comp.name; }
+    }
+    if(!sourceCounts[name]) sourceCounts[name]={icon,cnt:0};
+    sourceCounts[name].cnt++;
+  });
+  sourceGrid.innerHTML='';
+  Object.entries(sourceCounts).sort((a,b)=>b[1].cnt-a[1].cnt).slice(0,8).forEach(([name,{icon,cnt}])=>{
+    const chip=document.createElement('div');chip.className='ns-source-chip';
+    chip.innerHTML=`<span class="ns-source-icon">${icon}</span><span class="ns-source-name">${name}</span><span class="ns-source-cnt">${cnt}</span>`;
+    sourceGrid.appendChild(chip);
+  });
+
+  // Auto-expand if there are pending items
+  const panel = document.getElementById('notif-summary');
+  if(panel && pending>0) panel.classList.add('open');
+}
+
+/* ═══════════════════════════════════════════
+   NOTIFICATION POPUP
+═══════════════════════════════════════════ */
+let _popupTimer = null;
+function showNotifPopup(n, sourceIcon, sourceName, sourceType){
+  const prio = n.priority||'NORMAL';
+  const prioColor = {URGENT:'var(--red)',HIGH:'var(--amber)',NORMAL:'var(--cyan)',LOW:'var(--dim)'}[prio]||'var(--dim)';
+  const prioLabel = {URGENT:'🔴 URGENT',HIGH:'🟠 HIGH',NORMAL:'🔵 NORMAL',LOW:'⚪ LOW'}[prio];
+
+  document.getElementById('npop-icon').textContent    = sourceIcon;
+  document.getElementById('npop-source').textContent  = sourceName;
+  document.getElementById('npop-type').textContent    = sourceType;
+  document.getElementById('npop-title').textContent   = n.message || n.title || '—';
+  document.getElementById('npop-message').textContent = n.body || '—';
+  document.getElementById('npop-ts').textContent      = new Date().toLocaleTimeString('en-GB',{hour12:false});
+
+  const badge = document.getElementById('npop-prio-badge');
+  badge.textContent = prioLabel;
+  badge.style.color = prioColor;
+  badge.style.borderColor = prioColor;
+  badge.style.background = prioColor.replace('var(','').replace(')','');
+  badge.style.cssText += `;border:1px solid ${prioColor};color:${prioColor};background:${prioColor}18;padding:3px 8px;border-radius:2px;font-family:'Share Tech Mono',monospace;font-size:9px;letter-spacing:0.1em`;
+
+  const statusEl = document.getElementById('npop-status');
+  statusEl.textContent = n.status==='delivered' ? '✓ DELIVERED' : '● QUEUED';
+  statusEl.style.color = n.status==='delivered' ? 'var(--green)' : 'var(--amber)';
+
+  // Update popup top border color per priority + urgent pulse class
+  const popup = document.getElementById('notif-popup');
+  popup.style.borderTopColor = prioColor;
+  popup.classList.toggle('urgent-pulse', prio==='URGENT');
+  popup.classList.add('show');
+
+  if(_popupTimer) clearTimeout(_popupTimer);
+  _popupTimer = setTimeout(dismissPopup, prio==='URGENT'?9000:prio==='HIGH'?6000:4000);
+}
+function dismissPopup(){
+  const popup = document.getElementById('notif-popup');
+  popup.classList.remove('show','urgent-pulse');
+  if(_popupTimer){ clearTimeout(_popupTimer); _popupTimer=null; }
+}
+
+/* ═══════════════════════════════════════════
+   SERVER APPS UI — ICON TILE GRID
+   Matching style of component bus; click tile to
+   expand detail panel with important messages
+═══════════════════════════════════════════ */
+function getImportantMessages(app){
+  return app.messages.map((m,i)=>({msg:m, index:i, prio:aiGuessPriority(m.title,m.body)}))
+    .filter(x=>x.prio==='URGENT'||x.prio==='HIGH');
+}
+
+function buildAppGrid(){
+  const grid = document.getElementById('app-grid');
+  if(!grid) return;
+  grid.innerHTML = '';
+
+  SERVER_APPS.forEach(app=>{
+    const importantMsgs = getImportantMessages(app);
+    const tile = document.createElement('div');
+    tile.className = 'app-tile-new';
+    tile.id = 'apptile-'+app.id;
+
+    // Alert badge if there are important messages
+    const alertBadge = importantMsgs.length>0
+      ? `<div class="app-tile-alert">${importantMsgs.length}</div>`
+      : '';
+
+    tile.innerHTML = `
+      ${alertBadge}
+      <div class="app-tile-icon">${app.icon}</div>
+      <div class="app-tile-name" style="color:${app.color}">${app.name}</div>
+      <div class="app-tile-ver">v${app.version}</div>
+    `;
+    tile.onclick = ()=> selectApp(app);
+    grid.appendChild(tile);
+  });
+}
+
+function selectApp(app){
+  // Highlight tile
+  document.querySelectorAll('.app-tile-new').forEach(t=>t.classList.remove('active'));
+  const tile = document.getElementById('apptile-'+app.id);
+  if(tile) tile.classList.add('active');
+  selectedApp = app;
+  selectedAppMsg = null;
+
+  // Show detail area
+  const detailArea = document.getElementById('app-detail-area');
+  const detailIcon = document.getElementById('app-detail-icon');
+  const detailName = document.getElementById('app-detail-name');
+  const detailFull = document.getElementById('app-detail-full');
+  const msgList    = document.getElementById('app-detail-msgs');
+  if(!detailArea) return;
+
+  detailArea.style.display = 'block';
+  detailIcon.textContent = app.icon;
+  detailName.textContent = app.name;
+  detailName.style.color = app.color;
+  detailFull.textContent = app.full;
+
+  // Reset AI badge
+  const icon = document.getElementById('app-ai-prio-icon');
+  const txt  = document.getElementById('app-ai-prio-text');
+  const badge= document.getElementById('app-ai-prio-badge');
+  if(icon) icon.textContent='🤖';
+  if(txt)  txt.textContent='AI PRIO';
+  if(badge){ badge.style.borderColor='rgba(179,136,255,0.25)'; badge.style.color='var(--purple)'; }
+
+  // Build message list — all messages, important ones highlighted
+  msgList.innerHTML = '';
+  app.messages.forEach((m,i)=>{
+    const prio = aiGuessPriority(m.title, m.body);
+    const item = document.createElement('div');
+    item.className = `app-detail-item prio-${prio}`;
+    const prioColor = PRIO_COLORS[prio];
+    item.innerHTML = `
+      <div class="app-detail-item-header">
+        <div class="app-detail-item-title">${m.title}</div>
+        <span class="app-detail-item-prio" style="background:${prioColor}18;color:${prioColor};border:1px solid ${prioColor}44">${PRIO_ICONS[prio]} ${prio}</span>
+      </div>
+      <div class="app-detail-item-body">${m.body}</div>
+    `;
+    item.onclick = ()=>{
+      document.querySelectorAll('.app-detail-item').forEach(x=>x.classList.remove('selected'));
+      item.classList.add('selected');
+      selectedAppMsg = {msg:m, index:i};
+      if(icon) icon.textContent=PRIO_ICONS[prio];
+      if(txt)  txt.textContent=prio;
+      if(badge){ badge.style.borderColor=prioColor; badge.style.color=prioColor; }
+    };
+    msgList.appendChild(item);
+  });
+}
+
+function clearAppSelection(){
+  selectedApp = null; selectedAppMsg = null;
+  document.querySelectorAll('.app-tile-new').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.app-detail-item').forEach(c=>c.classList.remove('selected'));
+  const detailArea = document.getElementById('app-detail-area');
+  if(detailArea) detailArea.style.display='none';
+  const icon = document.getElementById('app-ai-prio-icon');
+  const txt  = document.getElementById('app-ai-prio-text');
+  const badge= document.getElementById('app-ai-prio-badge');
+  if(icon) icon.textContent='🤖';
+  if(txt)  txt.textContent='AI PRIO';
+  if(badge){ badge.style.borderColor='rgba(179,136,255,0.25)'; badge.style.color='var(--purple)'; }
+}
+
+function emitAppMsg(){
+  if(!selectedApp||!selectedAppMsg){ toast('SELECT AN APP MESSAGE FIRST'); return; }
+  const app = selectedApp;
+  const m   = selectedAppMsg.msg;
+  const idx = selectedAppMsg.index;
+  const prio = aiGuessPriority(m.title, m.body);
+  const fullTitle = `[${app.name}] ${m.title}`;
+  const n = {id:state.idCtr++, message:fullTitle, priority:prio, status:'pending', ts:Date.now(), component:'server:'+app.id, body:m.body};
+  state.notifications.push(n);
+  log(`[SRV·${app.name}→BUS] 🤖 ${prio} · "${m.title}"`, 'p');
+
+  // Flash app tile
+  const row = document.getElementById('apptile-'+app.id);
+  if(row){ row.classList.add('tx'); setTimeout(()=>row.classList.remove('tx'),900); }
+
+  addTimeline(n); renderLists(); serverDecide(n);
+  toast(`[${app.name}] SERVER → ${prio} · DISPATCHED`);
+
+  // Show notification popup
+  showNotifPopup(n, app.icon, app.name, 'Server App');
+
+  fetch(`${API_BASE}/server-apps/send`, {
+    method:'POST',
+    headers:{'Content-Type':'application/json','x-api-key':API_KEY},
+    body:JSON.stringify({app_id:app.id, message_index:idx})
+  }).catch(()=>{});
+  fetchAnalyticsPrediction();
+}
+
+function autoEmitAllApps(){
+  SERVER_APPS.forEach((app,ai)=>{
+    setTimeout(()=>{
+      const important = getImportantMessages(app);
+      const pool = important.length>0 ? important : app.messages.map((m,i)=>({msg:m,index:i,prio:aiGuessPriority(m.title,m.body)}));
+      const pick = pool[Math.floor(Math.random()*pool.length)];
+      const {msg:m, index:idx, prio} = pick;
+      const fullTitle = `[${app.name}] ${m.title}`;
+      const n = {id:state.idCtr++, message:fullTitle, priority:prio, status:'pending', ts:Date.now(), component:'server:'+app.id, body:m.body};
+      state.notifications.push(n);
+      log(`[SRV·AUTO·${app.name}] 🤖 ${prio} · "${m.title}"`, 'p');
+      const row = document.getElementById('apptile-'+app.id);
+      if(row){ row.classList.add('tx'); setTimeout(()=>row.classList.remove('tx'),700); }
+      addTimeline(n); renderLists(); serverDecide(n);
+      // Show popup for URGENT messages immediately; last-app popup for everything else
+      if(prio==='URGENT'){
+        showNotifPopup(n, app.icon, app.name, 'Server App · Urgent Blast');
+      } else if(ai===SERVER_APPS.length-1){
+        showNotifPopup(n, app.icon, app.name, 'Server App · Blast');
+      }
+      fetch(`${API_BASE}/server-apps/send`, {
+        method:'POST',
+        headers:{'Content-Type':'application/json','x-api-key':API_KEY},
+        body:JSON.stringify({app_id:app.id, message_index:idx})
+      }).catch(()=>{});
+    }, ai*280);
+  });
+  toast(`⟳ BLAST — ${SERVER_APPS.length} SERVER APPS`);
+  setTimeout(fetchAnalyticsPrediction, SERVER_APPS.length*280+500);
+}
+
+/* ═══════════════════════════════════════════
+   INIT
+═══════════════════════════════════════════ */
+buildHeatmap();buildRoute();buildComponentGrid();buildAppGrid();
+updateSignalUI();updateSpeedUI();updateHealth();
+renderLists();
+// Seed signal history
+for(let i=0;i<30;i++){state.sigHistory.push(35+Math.random()*20)}
+drawSparkline();updateHeatmap();
+// Initial analytics prediction fetch
+fetchAnalyticsPrediction();
+</script>
+</body>
+</html>

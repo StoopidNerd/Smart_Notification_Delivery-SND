@@ -1,74 +1,81 @@
- Geo-Deferred Notification System (SND):
-   Smart Notification Delivery based on Signal & Priority
+🚀 Geo-Deferred Notification System (SND)
 
-“We don’t just send notifications — we decide when to send them.”
+Smart notification delivery based on signal strength & priority
 
-Problem:
-In real-world environments (vehicles, low-network areas):
-. Notifications arrive at the wrong time
-. Important alerts get delayed
-. Weak signal causes delivery failure
-. Unnecessary notifications waste attention
-. Solution
+🧠 Problem
+Notifications arrive in weak networks
+Important alerts may fail or delay
+Unnecessary messages waste battery
 
-A system that intelligently decides whether to deliver or delay notifications based on:
+👉 Solution: Deliver notifications at the right time based on signal + priority
 
-.Network conditions
-.Message priority
-.How It Works (Simple Flow)
-.Notification generated
-.Sent to backend
-.Priority assigned (AI / rules)
-.Signal evaluated
-. Decision:
- Deliver immediately
- Defer (queue)
-.Retry when signal improves
-.Real-time update on dashboard
-. Key Features
-. Smart Logic
-.Priority-based system (URGENT, HIGH, NORMAL, LOW)
-.AI keyword-based priority detection
-.Emergency override (URGENT always delivers)
-📡 Network Awareness
-Signal zones: GREEN / YELLOW / RED
-Delivery decision based on signal strength
-🔄 Intelligent Delivery
-Queue-based system
-Retry mechanism with backoff
-Auto-delivery when conditions improve
-⚡ Real-Time System
-Live updates using WebSockets
-Dashboard with logs & analytics
-Signal + notification tracking
-🧱 Architecture
-User → Backend → Decision Engine → Queue/Deliver
-                ↓
-            Signal Engine
-                ↓
-        WebSocket → Dashboard
-🛠 Tech Stack
+⚙️ Key Features
+Priority-based delivery (URGENT, HIGH, NORMAL, LOW)
+Signal-aware system (GREEN, YELLOW, RED)
+Smart deferral + retry with backoff
+Queue-based processing
+Real-time WebSocket updates
+AI-based priority assignment
+Trip simulation + geo-based zones
+🧱 Tech Stack
 
-Backend:
+Backend: FastAPI, SQLite, Python asyncio, API Key Auth
+Frontend: HTML, CSS, JS (Real-time dashboard via WebSockets)
 
-FastAPI
-Python (async)
-SQLite
+🏗 Architecture
+User → FastAPI → Queue → Decision Engine → Delivery
+                     ↓
+                 Signal Engine
+                     ↓
+               WebSocket → UI
+🔄 How It Works
+Notification created (/notifications)
+Priority assigned (AI/manual)
+Signal checked (GREEN/YELLOW/RED)
+Decision → Deliver or Defer
+Retry engine ensures delivery
+Live updates via WebSocket
+📡 Signal Rules
+Priority	Allowed Signal
+URGENT	GREEN, YELLOW, RED
+HIGH	GREEN, YELLOW
+NORMAL	GREEN
+LOW	GREEN
+▶️ Run Locally
+pip install fastapi uvicorn
+python -m server:app --reload
 
-Frontend:
+Open → http://127.0.0.1:8000
 
-Streamlit / Web Dashboard
-WebSockets
+Auth:
+Authorization: Bearer Team201A
+
+📡 APIs
+POST /notifications → create notification
+POST /location → update signal/location
+POST /trip/simulate → simulate drive
+GET /analytics → system insights
+🔌 WebSocket Events
+notification_created
+notification_delivered
+notification_deferred
+notification_retrying
+notification_failed
+position_update
 🎯 Use Cases
-🚗 Smart vehicle systems
-🚑 Emergency alerts
-📡 Low-network regions
-🔋 Battery-efficient notifications
-🏆 Why This Stands Out
-✅ Solves a real-world problem
-✅ System-level architecture (not just UI)
-✅ Real-time + intelligent decision-making
-✅ Works even in poor network conditions
-🧠 One-Line Pitch
+Connected vehicles 🚗
+Emergency alerts 🚑
+Rural network optimization 📡
+Battery-efficient notifications 📲
+🧠 Core Concepts
 
-“A smart system that decides the right time to deliver notifications based on priority and network conditions.”
+Priority queues • Event-driven system • WebSockets • Retry logic • Geo-based decisions
+
+🚀 Future Scope
+ML-based prediction
+Mobile app integration
+Advanced analytics
+Real map APIs
+🏁 Summary
+
+Delivers the right notification at the right time using signal awareness + priority logic

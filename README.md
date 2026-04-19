@@ -125,6 +125,14 @@ Priority queues • Event-driven system • WebSockets • Retry logic • Geo-b
 
 ---
 
+Preview of the website
+<img width="1906" height="918" alt="Screenshot 2026-04-19 083059" src="https://github.com/user-attachments/assets/522ecde5-ca87-479d-80ec-f7eac5f792da" />
+<img width="1903" height="908" alt="Screenshot 2026-04-19 083038" src="https://github.com/user-attachments/assets/8aaf4ae6-5a82-446e-abe0-7f9ce3b0073a" />
+<img width="1909" height="898" alt="Screenshot 2026-04-19 083008" src="https://github.com/user-attachments/assets/9f402288-529e-4601-9948-ace0a46daeac" />
+<img width="1887" height="905" alt="Screenshot 2026-04-19 082939" src="https://github.com/user-attachments/assets/7a208e36-1b93-4e33-8b10-1e676ded773b" />
+<img width="1901" height="900" alt="Screenshot 2026-04-19 082909" src="https://github.com/user-attachments/assets/65c4ad64-9107-4244-bdce-63f8ecd2670e" />
+
+
 ## 🏁 Summary
 
 > **Delivers the right notification at the right time using signal awareness + priority logic**

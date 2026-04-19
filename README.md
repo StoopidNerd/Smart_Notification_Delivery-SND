@@ -116,7 +116,7 @@ Priority queues • Event-driven system • WebSockets • Retry logic • Geo-b
 
 ---
 
-## 🚀 Future Scope
+## 🚀 Future  Scope
 
 * ML-based prediction
 * Mobile app integration

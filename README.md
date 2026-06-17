@@ -1,20 +1,20 @@
-# 🚀 Geo-Deferred Notification System (SND)
+Geo-Deferred Notification System (SND)
 
 > **Smart notification delivery based on signal strength & priority**
 
 ---
 
-## 🧠 Problem
+Problem
 
 * Notifications arrive in weak networks
 * Important alerts may fail or delay
 * Unnecessary messages waste battery
 
-👉 **Solution:** Deliver notifications at the *right time* based on signal + priority
+**Solution:** Deliver notifications at the *right time* based on signal + priority
 
 ---
 
-## ⚙️ Key Features
+Key Features
 
 * Priority-based delivery (URGENT, HIGH, NORMAL, LOW)
 * Signal-aware system (GREEN, YELLOW, RED)
@@ -26,14 +26,14 @@
 
 ---
 
-## 🧱 Tech Stack
+Tech Stack
 
 **Backend:** FastAPI, SQLite, Python asyncio, API Key Auth
 **Frontend:** HTML, CSS, JS (Real-time dashboard via WebSockets)
 
 ---
 
-## 🏗 Architecture
+Architecture
 
 ```
 User → FastAPI → Queue → Decision Engine → Delivery
@@ -45,7 +45,7 @@ User → FastAPI → Queue → Decision Engine → Delivery
 
 ---
 
-## 🔄 How It Works
+How It Works
 
 1. Notification created (`/notifications`)
 2. Priority assigned (AI/manual)
@@ -56,7 +56,7 @@ User → FastAPI → Queue → Decision Engine → Delivery
 
 ---
 
-## 📡 Signal Rules
+Signal Rules
 
 | Priority | Allowed Signal     |
 | -------- | ------------------ |
@@ -67,21 +67,20 @@ User → FastAPI → Queue → Decision Engine → Delivery
 
 ---
 
-## ▶️ Run Locally
+Run Locally
 
 ```bash
 pip install fastapi uvicorn
 python -m server:app --reload
 ```
 
-Open → [http://127.0.0.1:8000](http://127.0.0.1:8000)
 
 **Auth:**
 `Authorization: Bearer Team201A`
 
 ---
 
-## 📡 APIs
+APIs
 
 * `POST /notifications` → create notification
 * `POST /location` → update signal/location
@@ -90,7 +89,7 @@ Open → [http://127.0.0.1:8000](http://127.0.0.1:8000)
 
 ---
 
-## 🔌 WebSocket Events
+WebSocket Events
 
 * notification_created
 * notification_delivered
@@ -101,7 +100,7 @@ Open → [http://127.0.0.1:8000](http://127.0.0.1:8000)
 
 ---
 
-## 🎯 Use Cases
+Use Cases
 
 * Connected vehicles 🚗
 * Emergency alerts 🚑
@@ -110,13 +109,13 @@ Open → [http://127.0.0.1:8000](http://127.0.0.1:8000)
 
 ---
 
-## 🧠 Core Concepts
+Core Concepts
 
 Priority queues • Event-driven system • WebSockets • Retry logic • Geo-based decisions
 
 ---
 
-## 🚀 Future  Scope
+Future  Scope
 
 * ML-based prediction
 * Mobile app integration
@@ -133,6 +132,6 @@ Preview of the website
 <img width="1901" height="900" alt="Screenshot 2026-04-19 082909" src="https://github.com/user-attachments/assets/65c4ad64-9107-4244-bdce-63f8ecd2670e" />
 
 
-## 🏁 Summary
+Summary
 
 > **Delivers the right notification at the right time using signal awareness + priority logic**

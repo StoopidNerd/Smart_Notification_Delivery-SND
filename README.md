@@ -102,10 +102,10 @@ WebSocket Events
 
 Use Cases
 
-* Connected vehicles 🚗
-* Emergency alerts 🚑
-* Rural network optimization 📡
-* Battery-efficient notifications 📲
+* Connected vehicles 
+* Emergency alerts 
+* Rural network optimization 
+* Battery-efficient notifications 
 
 ---
 
